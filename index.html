@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Andy's HTML Tools</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0f0f0f; --surface:#1a1a1a; --border:#2a2a2a;
+      --text:#f0ede8; --muted:#777; --accent:#e74c3c;
+    }
+    body{
+      font-family:'Barlow',sans-serif; font-weight:300;
+      background:var(--bg); color:var(--text);
+      min-height:100vh; padding:3rem 1.5rem;
+    }
+    .page{max-width:760px; margin:0 auto;}
+
+    header{margin-bottom:3.5rem; border-bottom:1px solid var(--border); padding-bottom:2rem;}
+    .site-name{
+      font-family:'Barlow Condensed',sans-serif; font-weight:800;
+      font-size:clamp(2.5rem,8vw,4.5rem); text-transform:uppercase;
+      letter-spacing:.02em; line-height:1;
+    }
+    .site-name span{color:var(--accent);}
+    .site-desc{
+      margin-top:.75rem; font-size:.85rem; color:var(--muted);
+      letter-spacing:.06em; text-transform:uppercase;
+    }
+    .domain{
+      margin-top:.5rem; font-family:'Barlow Condensed',sans-serif;
+      font-size:.9rem; color:var(--muted); letter-spacing:.08em;
+    }
+
+    .tools-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+      gap:1px; background:var(--border);
+      border:1px solid var(--border);
+    }
+
+    .tool-card{
+      background:var(--surface);
+      padding:1.75rem 1.5rem;
+      text-decoration:none; color:inherit;
+      display:block; transition:background .15s;
+      position:relative; overflow:hidden;
+    }
+    .tool-card::after{
+      content:'→';
+      position:absolute; right:1.5rem; bottom:1.5rem;
+      font-size:1.2rem; color:var(--border);
+      transition:color .15s, transform .2s;
+    }
+    .tool-card:hover{background:#222;}
+    .tool-card:hover::after{color:var(--accent); transform:translateX(3px);}
+
+    .tool-tag{
+      font-family:'Barlow Condensed',sans-serif; font-size:.65rem;
+      font-weight:600; letter-spacing:.15em; text-transform:uppercase;
+      color:var(--accent); margin-bottom:.6rem;
+    }
+    .tool-name{
+      font-family:'Barlow Condensed',sans-serif; font-weight:700;
+      font-size:1.4rem; letter-spacing:.02em; line-height:1.1;
+      margin-bottom:.5rem;
+    }
+    .tool-desc{
+      font-size:.8rem; color:var(--muted); line-height:1.6;
+    }
+
+    footer{
+      margin-top:3rem; padding-top:1.5rem;
+      border-top:1px solid var(--border);
+      font-size:.7rem; color:var(--muted); letter-spacing:.06em;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="site-name">HTML<span>.</span>Tools</div>
+    <div class="site-desc">Single-file calculators &amp; utilities</div>
+    <div class="domain">htmltools.andyreagan.com</div>
+  </header>
+
+  <div class="tools-grid">
+    <a class="tool-card" href="ftp-vo2max.html">
+      <div class="tool-tag">Cycling</div>
+      <div class="tool-name">FTP ↔ VO₂max</div>
+      <div class="tool-desc">Convert between functional threshold power and aerobic capacity. Includes 90% confidence interval.</div>
+    </a>
+    <a class="tool-card" href="sri-sleep-calculator.html">
+      <div class="tool-tag">Sleep</div>
+      <div class="tool-name">Sleep Regularity Index</div>
+      <div class="tool-desc">Enter your weekly sleep schedule and compute your SRI score with visual timeline.</div>
+    </a>
+    <a class="tool-card" href="chess-timer.html">
+      <div class="tool-tag">Game</div>
+      <div class="tool-name">Chess Timer</div>
+      <div class="tool-desc">Over-the-board chess clock with presets, increment support, and move counter.</div>
+    </a>
+  </div>
+
+  <footer>Andy Reagan &mdash; open source, no dependencies, no tracking</footer>
+</div>
+</body>
+</html>

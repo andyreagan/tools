@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chess Timer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --ivory: #f5f0e8; --cream: #ede8dd; --ebony: #1a1a18;
+      --dark: #2c2b27; --mid: #5c5a52; --gold: #c9a84c;
+      --gold-light: #e8c97a; --danger: #c0392b;
+    }
+    body {
+      font-family: 'DM Mono', monospace;
+      background: var(--ebony);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      overflow: hidden; user-select: none;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image: repeating-conic-gradient(#222220 0% 25%, #1a1a18 0% 50%);
+      background-size: 60px 60px; opacity: 0.4; z-index: 0;
+    }
+    .container {
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column;
+      align-items: center; width: min(420px, 96vw);
+    }
+    .clock { width: 100%; cursor: pointer; position: relative; }
+    .clock--top { transform: rotate(180deg); }
+    .clock--top .clock-inner { border-radius: 0 0 24px 24px; }
+    .clock--bottom .clock-inner { border-radius: 24px 24px 0 0; }
+    .clock-inner {
+      padding: 32px 36px 28px;
+      background: var(--cream);
+      transition: background 0.2s, box-shadow 0.2s;
+      position: relative; overflow: hidden;
+    }
+    .clock-inner::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .clock.active .clock-inner { background: var(--ivory); box-shadow: 0 0 0 3px var(--gold) inset; }
+    .clock.flagged .clock-inner { background: #fff0f0; box-shadow: 0 0 0 3px var(--danger) inset; }
+    .player-label {
+      font-family: 'Playfair Display', serif;
+      font-size: 0.85rem; letter-spacing: 0.15em;
+      text-transform: uppercase; color: var(--mid); margin-bottom: 8px;
+    }
+    .clock.active .player-label { color: var(--dark); }
+    .time-display {
+      font-size: clamp(3.5rem, 14vw, 5rem); font-weight: 300;
+      letter-spacing: -0.02em; color: var(--dark); line-height: 1;
+    }
+    .time-display .sep { opacity: 0.4; animation: blink 1s step-end infinite; }
+    .clock.active .time-display .sep { opacity: 1; animation: none; }
+    .clock.flagged .time-display { color: var(--danger); }
+    @keyframes blink { 50% { opacity: 0.1; } }
+    .moves-badge { display: inline-block; margin-top: 10px; font-size: 0.75rem; color: var(--mid); letter-spacing: 0.08em; }
+    .clock.active .moves-badge { color: var(--gold); }
+    .controls {
+      position: relative; z-index: 2;
+      background: var(--dark); width: 100%;
+      padding: 14px 20px;
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    }
+    .btn {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
+      border: 1px solid #444; background: transparent; color: var(--ivory);
+      padding: 7px 14px; border-radius: 6px; cursor: pointer; transition: all 0.15s;
+    }
+    .btn:hover { background: #3a3933; border-color: var(--gold); color: var(--gold); }
+    .btn.btn-primary { background: var(--gold); color: var(--ebony); border-color: var(--gold); font-weight: 500; }
+    .btn.btn-primary:hover { background: var(--gold-light); }
+    .settings {
+      position: relative; z-index: 1;
+      background: #252521; width: 100%;
+      border-radius: 0 0 20px 20px; padding: 20px; display: none;
+    }
+    .settings.open { display: block; }
+    .settings-title { font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--mid); margin-bottom: 14px; }
+    .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+    .preset-btn {
+      font-family: 'DM Mono', monospace; font-size: 0.72rem;
+      padding: 6px 12px; border-radius: 6px; border: 1px solid #444;
+      background: transparent; color: var(--ivory); cursor: pointer; transition: all 0.15s;
+    }
+    .preset-btn:hover, .preset-btn.selected { background: var(--gold); color: var(--ebony); border-color: var(--gold); }
+    .custom-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .custom-row label { font-size: 0.72rem; color: var(--mid); letter-spacing: 0.05em; }
+    .custom-row input {
+      font-family: 'DM Mono', monospace; font-size: 0.85rem;
+      width: 56px; padding: 6px 10px;
+      background: #1a1a18; border: 1px solid #444; border-radius: 6px;
+      color: var(--ivory); text-align: center;
+    }
+    .custom-row input:focus { outline: none; border-color: var(--gold); }
+    .flag-overlay {
+      display: none; position: absolute; inset: 0;
+      align-items: center; justify-content: center;
+      background: rgba(192,57,43,0.15); font-size: 2rem;
+    }
+    .clock.flagged .flag-overlay { display: flex; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="clock clock--top" id="clock2" onclick="handleClockClick(2)">
+    <div class="clock-inner">
+      <div class="player-label">Player 2</div>
+      <div class="time-display"><span id="min2">10</span><span class="sep">:</span><span id="sec2">00</span></div>
+      <div class="moves-badge" id="moves2">0 moves</div>
+      <div class="flag-overlay">🏳️</div>
+    </div>
+  </div>
+  <div class="controls">
+    <button class="btn" onclick="toggleSettings()">⚙ Time</button>
+    <button class="btn btn-primary" id="pauseBtn" onclick="togglePause()">▶ Start</button>
+    <button class="btn" onclick="resetGame()">↺ Reset</button>
+  </div>
+  <div class="settings" id="settings">
+    <div class="settings-title">Time Control</div>
+    <div class="presets">
+      <button class="preset-btn" onclick="setPreset(1,0,this)">1+0 Bullet</button>
+      <button class="preset-btn" onclick="setPreset(2,1,this)">2+1 Bullet</button>
+      <button class="preset-btn" onclick="setPreset(3,2,this)">3+2 Blitz</button>
+      <button class="preset-btn" onclick="setPreset(5,0,this)">5+0 Blitz</button>
+      <button class="preset-btn selected" onclick="setPreset(10,0,this)">10+0 Rapid</button>
+      <button class="preset-btn" onclick="setPreset(15,10,this)">15+10 Rapid</button>
+    </div>
+    <div class="custom-row">
+      <label>Min</label>
+      <input type="number" id="customMin" value="10" min="1" max="180">
+      <label>Inc (s)</label>
+      <input type="number" id="customInc" value="0" min="0" max="60">
+      <button class="btn btn-primary" onclick="applyCustom()">Apply</button>
+    </div>
+  </div>
+  <div class="clock clock--bottom" id="clock1" onclick="handleClockClick(1)">
+    <div class="clock-inner">
+      <div class="player-label">Player 1</div>
+      <div class="time-display"><span id="min1">10</span><span class="sep">:</span><span id="sec1">00</span></div>
+      <div class="moves-badge" id="moves1">0 moves</div>
+      <div class="flag-overlay">🏳️</div>
+    </div>
+  </div>
+</div>
+<script>
+  let baseMinutes=10, increment=0;
+  let totalSeconds=[600,600], moves=[0,0];
+  let activePlayer=null, paused=true, interval=null, flagged=[false,false];
+
+  function handleClockClick(player) {
+    if (flagged[0]||flagged[1]) return;
+    if (paused && activePlayer===null) {
+      activePlayer = player===1 ? 2 : 1;
+      paused=false;
+      document.getElementById('pauseBtn').textContent='⏸ Pause';
+      startTimer(); updateHighlight(); return;
+    }
+    if (paused || activePlayer!==player) return;
+    totalSeconds[player-1]+=increment;
+    moves[player-1]++;
+    activePlayer = player===1 ? 2 : 1;
+    updateHighlight(); updateUI();
+  }
+
+  function startTimer() {
+    clearInterval(interval);
+    interval=setInterval(()=>{
+      if (paused) return;
+      const p=activePlayer-1;
+      totalSeconds[p]--;
+      if (totalSeconds[p]<=0) {
+        totalSeconds[p]=0; flagged[p]=true; paused=true;
+        clearInterval(interval);
+        document.getElementById('clock'+activePlayer).classList.add('flagged');
+        document.getElementById('pauseBtn').textContent='▶ Start';
+      }
+      updateUI();
+    },1000);
+  }
+
+  function togglePause() {
+    if (flagged[0]||flagged[1]||activePlayer===null) return;
+    paused=!paused;
+    document.getElementById('pauseBtn').textContent=paused?'▶ Resume':'⏸ Pause';
+    if (!paused) startTimer();
+  }
+
+  function resetGame() {
+    clearInterval(interval); paused=true; activePlayer=null;
+    flagged=[false,false]; moves=[0,0];
+    totalSeconds=[baseMinutes*60,baseMinutes*60];
+    document.getElementById('pauseBtn').textContent='▶ Start';
+    document.getElementById('clock1').className='clock clock--bottom';
+    document.getElementById('clock2').className='clock clock--top';
+    updateUI();
+  }
+
+  function updateHighlight() {
+    document.getElementById('clock1').className='clock clock--bottom'+(activePlayer===1?' active':'');
+    document.getElementById('clock2').className='clock clock--top'+(activePlayer===2?' active':'');
+  }
+
+  function updateUI() {
+    for (let p=1;p<=2;p++) {
+      const s=Math.max(0,totalSeconds[p-1]);
+      document.getElementById('min'+p).textContent=String(Math.floor(s/60)).padStart(2,'0');
+      document.getElementById('sec'+p).textContent=String(s%60).padStart(2,'0');
+      document.getElementById('moves'+p).textContent=moves[p-1]+' move'+(moves[p-1]!==1?'s':'');
+    }
+  }
+
+  function toggleSettings() { document.getElementById('settings').classList.toggle('open'); }
+
+  function setPreset(min,inc,btn) {
+    baseMinutes=min; increment=inc;
+    document.getElementById('customMin').value=min;
+    document.getElementById('customInc').value=inc;
+    document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('selected'));
+    btn.classList.add('selected');
+    resetGame();
+  }
+
+  function applyCustom() {
+    baseMinutes=parseInt(document.getElementById('customMin').value)||10;
+    increment=parseInt(document.getElementById('customInc').value)||0;
+    document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('selected'));
+    resetGame();
+  }
+
+  updateUI();
+</script>
+</body>
+</html>

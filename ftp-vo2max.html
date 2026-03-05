@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FTP ↔ VO₂max Calculator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+      --mid:#666; --muted:#999; --border:#ddd;
+      --red:#c0392b; --orange:#e67e22; --accent:#e74c3c;
+      --power:#e74c3c; --vo2:#2980b9;
+    }
+    body{
+      font-family:'Barlow',sans-serif; font-weight:300;
+      background:var(--bg); color:var(--dark);
+      min-height:100vh; display:flex; flex-direction:column;
+      align-items:center; justify-content:center; padding:2rem 1rem;
+    }
+    /* diagonal stripe background */
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0;
+      background-image:repeating-linear-gradient(
+        45deg, transparent, transparent 20px,
+        rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+      );
+    }
+
+    .page{position:relative;z-index:1;width:min(580px,100%);}
+
+    header{margin-bottom:2rem; text-align:center;}
+    h1{
+      font-family:'Barlow Condensed',sans-serif; font-weight:700;
+      font-size:clamp(2.2rem,7vw,3.5rem); text-transform:uppercase;
+      letter-spacing:.04em; line-height:1;
+    }
+    h1 .slash{color:var(--accent); margin:0 .15em;}
+    .tagline{font-size:.8rem; color:var(--muted); letter-spacing:.1em; text-transform:uppercase; margin-top:.4rem;}
+
+    /* Mode toggle */
+    .toggle{
+      display:flex; border:2px solid var(--dark);
+      border-radius:4px; overflow:hidden; margin:1.5rem auto;
+      width:fit-content;
+    }
+    .toggle-btn{
+      font-family:'Barlow Condensed',sans-serif; font-weight:600;
+      font-size:.85rem; letter-spacing:.08em; text-transform:uppercase;
+      padding:.5rem 1.4rem; border:none; cursor:pointer;
+      background:transparent; color:var(--mid); transition:all .15s;
+    }
+    .toggle-btn.active{background:var(--dark); color:#fff;}
+
+    /* Card */
+    .card{
+      background:var(--surface); border:2px solid var(--dark);
+      border-radius:4px; padding:2rem;
+    }
+
+    /* Inputs */
+    .field{margin-bottom:1.25rem;}
+    .field-label{
+      font-family:'Barlow Condensed',sans-serif; font-weight:600;
+      font-size:.75rem; letter-spacing:.12em; text-transform:uppercase;
+      color:var(--mid); margin-bottom:.4rem; display:flex;
+      align-items:baseline; gap:.5rem;
+    }
+    .field-hint{font-weight:300; font-size:.7rem; color:var(--muted); text-transform:none; letter-spacing:0;}
+    .input-row{display:flex; gap:.5rem;}
+    input[type=number]{
+      font-family:'Barlow Condensed',sans-serif; font-weight:400;
+      font-size:1.4rem; width:100%; padding:.5rem .75rem;
+      border:2px solid var(--border); border-radius:3px;
+      background:#fafafa; color:var(--dark);
+      transition:border-color .15s;
+    }
+    input[type=number]:focus{outline:none; border-color:var(--dark);}
+    .unit-btn{
+      font-family:'Barlow Condensed',sans-serif; font-size:.8rem;
+      font-weight:600; letter-spacing:.05em; text-transform:uppercase;
+      padding:.5rem .9rem; border:2px solid var(--border);
+      background:#fafafa; color:var(--mid); cursor:pointer;
+      border-radius:3px; white-space:nowrap; transition:all .15s;
+    }
+    .unit-btn.active{background:var(--dark); color:#fff; border-color:var(--dark);}
+
+    /* Calculate button */
+    .calc-btn{
+      font-family:'Barlow Condensed',sans-serif; font-weight:700;
+      font-size:1rem; letter-spacing:.12em; text-transform:uppercase;
+      width:100%; padding:.75rem; margin-top:.5rem;
+      background:var(--dark); color:#fff; border:none;
+      border-radius:3px; cursor:pointer; transition:background .15s;
+    }
+    .calc-btn:hover{background:var(--accent);}
+
+    /* Result */
+    .result{
+      margin-top:1.5rem; padding:1.5rem;
+      border:2px solid var(--dark); border-radius:3px;
+      background:#fafafa; display:none;
+    }
+    .result.show{display:block;}
+    .result-label{
+      font-family:'Barlow Condensed',sans-serif; font-size:.7rem;
+      font-weight:600; letter-spacing:.12em; text-transform:uppercase;
+      color:var(--muted); margin-bottom:.25rem;
+    }
+    .result-value{
+      font-family:'Barlow Condensed',sans-serif; font-weight:700;
+      font-size:3rem; line-height:1; color:var(--dark);
+    }
+    .result-unit{font-size:1rem; font-weight:400; color:var(--mid);}
+    .result-ci{
+      font-size:.8rem; color:var(--muted); margin-top:.4rem;
+    }
+    .result-secondary{
+      margin-top:1rem; padding-top:1rem;
+      border-top:1px solid var(--border);
+      font-size:.8rem; color:var(--mid); line-height:1.7;
+    }
+    .result-secondary strong{color:var(--dark);}
+
+    /* Divider between fields */
+    hr{border:none; border-top:1px solid var(--border); margin:1.5rem 0;}
+
+    .note{
+      margin-top:1.25rem; font-size:.72rem; color:var(--muted);
+      line-height:1.6; border-left:3px solid var(--border);
+      padding-left:.75rem;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>FTP <span class="slash">↔</span> VO₂max</h1>
+    <div class="tagline">Cycling power ↔ aerobic capacity estimator</div>
+  </header>
+
+  <div class="toggle">
+    <button class="toggle-btn active" id="btnFtoV" onclick="setMode('ftov')">FTP → VO₂max</button>
+    <button class="toggle-btn" id="btnVtoF" onclick="setMode('vtof')">VO₂max → FTP</button>
+  </div>
+
+  <div class="card">
+    <div id="panelFtoV">
+      <div class="field">
+        <div class="field-label">FTP <span class="field-hint">Functional Threshold Power</span></div>
+        <input type="number" id="ftpInput" placeholder="280" min="50" max="600">
+      </div>
+      <div class="field">
+        <div class="field-label">Body weight</div>
+        <div class="input-row">
+          <input type="number" id="weightFV" placeholder="70" min="30" max="200">
+          <button class="unit-btn active" id="wUnitFV_kg" onclick="setWeightUnit('FV','kg')">kg</button>
+          <button class="unit-btn" id="wUnitFV_lbs" onclick="setWeightUnit('FV','lbs')">lbs</button>
+        </div>
+      </div>
+      <button class="calc-btn" onclick="calcFtoV()">Calculate VO₂max →</button>
+    </div>
+
+    <div id="panelVtoF" style="display:none">
+      <div class="field">
+        <div class="field-label">VO₂max <span class="field-hint">ml/kg/min</span></div>
+        <input type="number" id="vo2Input" placeholder="55" min="20" max="100">
+      </div>
+      <div class="field">
+        <div class="field-label">Body weight</div>
+        <div class="input-row">
+          <input type="number" id="weightVF" placeholder="70" min="30" max="200">
+          <button class="unit-btn active" id="wUnitVF_kg" onclick="setWeightUnit('VF','kg')">kg</button>
+          <button class="unit-btn" id="wUnitVF_lbs" onclick="setWeightUnit('VF','lbs')">lbs</button>
+        </div>
+      </div>
+      <button class="calc-btn" onclick="calcVtoF()">Calculate FTP →</button>
+    </div>
+
+    <div class="result" id="result">
+      <div class="result-label" id="resultLabel">Estimated VO₂max</div>
+      <div class="result-value" id="resultValue">—</div>
+      <div class="result-ci" id="resultCI"></div>
+      <div class="result-secondary" id="resultSecondary"></div>
+    </div>
+
+    <div class="note">
+      Uses the relationship: FTP ≈ 75% of VO₂max power. <br>
+      VO₂max power (W) = (VO₂max − 7) × weight(kg) / 10.8.<br>
+      90% CI based on fractional utilization range 70–86% across trained cyclists.
+    </div>
+  </div>
+</div>
+
+<script>
+  let mode = 'ftov';
+  let wUnitFV = 'kg', wUnitVF = 'kg';
+
+  function setMode(m) {
+    mode = m;
+    document.getElementById('panelFtoV').style.display = m==='ftov'?'':'none';
+    document.getElementById('panelVtoF').style.display = m==='vtof'?'':'none';
+    document.getElementById('btnFtoV').classList.toggle('active', m==='ftov');
+    document.getElementById('btnVtoF').classList.toggle('active', m==='vtof');
+    document.getElementById('result').classList.remove('show');
+  }
+
+  function setWeightUnit(panel, unit) {
+    if (panel==='FV') {
+      wUnitFV=unit;
+      document.getElementById('wUnitFV_kg').classList.toggle('active',unit==='kg');
+      document.getElementById('wUnitFV_lbs').classList.toggle('active',unit==='lbs');
+    } else {
+      wUnitVF=unit;
+      document.getElementById('wUnitVF_kg').classList.toggle('active',unit==='kg');
+      document.getElementById('wUnitVF_lbs').classList.toggle('active',unit==='lbs');
+    }
+  }
+
+  function toKg(w, unit) { return unit==='lbs' ? w*0.453592 : w; }
+
+  function calcFtoV() {
+    const ftp = parseFloat(document.getElementById('ftpInput').value);
+    const wRaw = parseFloat(document.getElementById('weightFV').value);
+    if (isNaN(ftp)||isNaN(wRaw)) return;
+    const wKg = toKg(wRaw, wUnitFV);
+    const wPerKg = ftp/wKg;
+
+    // Central estimate: FU = 0.75
+    const vo2Central = (wPerKg/0.75)*10.8 + 7;
+    // 90% CI: FU range 0.70 to 0.86
+    const vo2Low = (wPerKg/0.86)*10.8 + 7;
+    const vo2High = (wPerKg/0.70)*10.8 + 7;
+
+    showResult(
+      'Estimated VO₂max',
+      vo2Central.toFixed(1), 'ml/kg/min',
+      `90% CI: ${vo2Low.toFixed(1)} – ${vo2High.toFixed(1)} ml/kg/min`,
+      `<strong>W/kg:</strong> ${wPerKg.toFixed(2)} &nbsp;|&nbsp; <strong>Weight:</strong> ${wKg.toFixed(1)} kg<br>
+       Wide CI reflects individual variation in fractional utilization (70–86%).<br>
+       Elite cyclists can sustain a higher % of VO₂max at threshold.`
+    );
+  }
+
+  function calcVtoF() {
+    const vo2 = parseFloat(document.getElementById('vo2Input').value);
+    const wRaw = parseFloat(document.getElementById('weightVF').value);
+    if (isNaN(vo2)||isNaN(wRaw)) return;
+    const wKg = toKg(wRaw, wUnitVF);
+
+    // VO2max power (W/kg) = (vo2 - 7) / 10.8
+    const vo2WperKg = (vo2 - 7) / 10.8;
+    const ftpCentral = vo2WperKg * 0.75 * wKg;
+    const ftpLow = vo2WperKg * 0.70 * wKg;
+    const ftpHigh = vo2WperKg * 0.86 * wKg;
+
+    showResult(
+      'Estimated FTP',
+      Math.round(ftpCentral).toString(), 'watts',
+      `90% CI: ${Math.round(ftpLow)} – ${Math.round(ftpHigh)} W`,
+      `<strong>VO₂max power:</strong> ${(vo2WperKg*wKg).toFixed(0)} W &nbsp;|&nbsp; <strong>W/kg FTP:</strong> ${(ftpCentral/wKg).toFixed(2)}<br>
+       Assumes 75% fractional utilization (typical trained cyclist).`
+    );
+  }
+
+  function showResult(label, value, unit, ci, secondary) {
+    document.getElementById('resultLabel').textContent = label;
+    document.getElementById('resultValue').innerHTML = value + `<span class="result-unit"> ${unit}</span>`;
+    document.getElementById('resultCI').textContent = ci;
+    document.getElementById('resultSecondary').innerHTML = secondary;
+    document.getElementById('result').classList.add('show');
+  }
+</script>
+</body>
+</html>
