@@ -4,29 +4,78 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Steps → Calories — Andy's Toolbox</title>
-
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{--bg:#0f0f0f;--border:#2a2a2a;--muted:#777;--accent:#e74c3c;}
-    body{font-family:system-ui,sans-serif;font-weight:300;background:var(--bg);color:#f0ede8;height:100vh;display:flex;flex-direction:column;}
-    header{padding:.75rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:1.5rem;flex-shrink:0;}
-    .back{font-weight:700;font-size:1rem;color:var(--muted);text-decoration:none;letter-spacing:.08em;text-transform:uppercase;}
-    .back:hover{color:var(--accent);}
-    .back::before{content:'← ';}
-    .tool-tag{font-size:.65rem;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--accent);}
-    h1{font-weight:800;font-size:1.4rem;letter-spacing:.02em;}
-    iframe{flex:1;border:none;width:100%;background:#fff;}
+    :root{
+      --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+      --mid:#666; --muted:#999; --border:#ddd; --accent:#e74c3c;
+    }
+    body{
+      font-family:system-ui,sans-serif;
+      background:var(--bg); color:var(--dark);
+      min-height:100vh; display:flex; flex-direction:column;
+      align-items:center; padding:2rem 1rem;
+    }
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0;
+      background-image:repeating-linear-gradient(
+        45deg, transparent, transparent 20px,
+        rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+      );
+    }
+    .page{position:relative;z-index:1;width:min(620px,100%);margin:auto 0;}
+    .card{
+      background:var(--surface); border:2px solid var(--dark);
+      border-radius:4px; padding:2rem;
+    }
+
+    /* Observable overrides */
+    .card h1,.card h2,.card h3,.card h4,.card h5,.card h6,.card p,.card span,.card label,.card div,.card a,.card strong,.card em,.card td,.card th,.card li{color:var(--dark)!important;}
+    .card a{color:var(--accent)!important;}
+    input,select,textarea{
+      font-size:1rem; padding:.4rem .6rem;
+      border:2px solid var(--border); border-radius:3px;
+      background:#fafafa; color:var(--dark);
+    }
+    input:focus,select:focus,textarea:focus{outline:none; border-color:var(--dark);}
+    form{color:var(--dark);}
+
+    .observablehq--inspect,.observablehq--string,.observablehq--number{color:var(--dark)!important;}
+    .observablehq{margin-bottom:1rem;}
+    .observable-link{margin-top:.75rem;font-size:.72rem;color:var(--muted);text-align:right;}
+    .observable-link a{color:var(--mid);text-decoration:none;transition:color .15s;}
+    .observable-link a:hover{color:var(--accent);}
   </style>
 </head>
 <body>
-  <header>
-    <a class="back" href="/">Andy's Toolbox</a>
-    <div>
-      <div class="tool-tag">Fitness</div>
-      <h1>Steps → Calories</h1>
-    </div>
-  </header>
-  <iframe src="https://observablehq.com/embed/@andyreagan/steps-to-calories-burned@136?cell=*" loading="lazy" title="Steps to Calories Burned"></iframe>
-  <script src="/footer.js"></script>
+<div class="page">
+  <div class="card">
+    <div id="observablehq-title-26147035"></div>
+    <div id="observablehq-description_md-26147035"></div>
+    <div id="observablehq-weight_input-26147035"></div>
+    <div id="observablehq-height_input-26147035"></div>
+    <div id="observablehq-viewof-steps-26147035"></div>
+    <div id="observablehq-viewof-speed-26147035"></div>
+    <div id="observablehq-result_md-26147035"></div>
+  </div>
+  <div class="observable-link">Built on <a href="https://observablehq.com/@andyreagan/steps-to-calories-burned" target="_blank" rel="noopener">Observable</a></div>
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@observablehq/inspector@5/dist/inspector.css">
+<script type="module">
+import {Runtime, Inspector} from "https://cdn.jsdelivr.net/npm/@observablehq/runtime@5/dist/runtime.js";
+import define from "https://api.observablehq.com/@andyreagan/steps-to-calories-burned.js?v=4";
+new Runtime().module(define, name => {
+  if (name === "title") return new Inspector(document.querySelector("#observablehq-title-26147035"));
+  if (name === "description_md") return new Inspector(document.querySelector("#observablehq-description_md-26147035"));
+  if (name === "weight_input") return new Inspector(document.querySelector("#observablehq-weight_input-26147035"));
+  if (name === "height_input") return new Inspector(document.querySelector("#observablehq-height_input-26147035"));
+  if (name === "viewof steps") return new Inspector(document.querySelector("#observablehq-viewof-steps-26147035"));
+  if (name === "viewof speed") return new Inspector(document.querySelector("#observablehq-viewof-speed-26147035"));
+  if (name === "result_md") return new Inspector(document.querySelector("#observablehq-result_md-26147035"));
+  return ["distance_m","time_h","time_m","cal","speed_mph","MET","speed_kph"].includes(name);
+});
+</script>
+<script src="/footer.js"></script>
 </body>
 </html>

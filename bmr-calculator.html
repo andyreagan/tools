@@ -4,29 +4,76 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>BMR Calculator — Andy's Toolbox</title>
-
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{--bg:#0f0f0f;--border:#2a2a2a;--muted:#777;--accent:#e74c3c;}
-    body{font-family:system-ui,sans-serif;font-weight:300;background:var(--bg);color:#f0ede8;height:100vh;display:flex;flex-direction:column;}
-    header{padding:.75rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:1.5rem;flex-shrink:0;}
-    .back{font-weight:700;font-size:1rem;color:var(--muted);text-decoration:none;letter-spacing:.08em;text-transform:uppercase;}
-    .back:hover{color:var(--accent);}
-    .back::before{content:'← ';}
-    .tool-tag{font-size:.65rem;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--accent);}
-    h1{font-weight:800;font-size:1.4rem;letter-spacing:.02em;}
-    iframe{flex:1;border:none;width:100%;background:#fff;}
+    :root{
+      --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+      --mid:#666; --muted:#999; --border:#ddd; --accent:#e74c3c;
+    }
+    body{
+      font-family:system-ui,sans-serif;
+      background:var(--bg); color:var(--dark);
+      min-height:100vh; display:flex; flex-direction:column;
+      align-items:center; padding:2rem 1rem;
+    }
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0;
+      background-image:repeating-linear-gradient(
+        45deg, transparent, transparent 20px,
+        rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+      );
+    }
+    .page{position:relative;z-index:1;width:min(620px,100%);margin:auto 0;}
+    .card{
+      background:var(--surface); border:2px solid var(--dark);
+      border-radius:4px; padding:2rem;
+    }
+
+    /* Observable overrides */
+    .card h1,.card h2,.card h3,.card h4,.card h5,.card h6,.card p,.card span,.card label,.card div,.card a,.card strong,.card em,.card td,.card th,.card li{color:var(--dark)!important;}
+    .card a{color:var(--accent)!important;}
+    input,select,textarea{
+      font-size:1rem; padding:.4rem .6rem;
+      border:2px solid var(--border); border-radius:3px;
+      background:#fafafa; color:var(--dark);
+    }
+    input:focus,select:focus,textarea:focus{outline:none; border-color:var(--dark);}
+    form{color:var(--dark);}
+
+    /* Observable Inspector styling */
+    .observablehq--inspect,.observablehq--string,.observablehq--number{color:var(--dark)!important;}
+    .observablehq{margin-bottom:1rem;}
+    .observable-link{margin-top:.75rem;font-size:.72rem;color:var(--muted);text-align:right;}
+    .observable-link a{color:var(--mid);text-decoration:none;transition:color .15s;}
+    .observable-link a:hover{color:var(--accent);}
   </style>
 </head>
 <body>
-  <header>
-    <a class="back" href="/">Andy's Toolbox</a>
-    <div>
-      <div class="tool-tag">Health</div>
-      <h1>BMR Calculator</h1>
-    </div>
-  </header>
-  <iframe src="https://observablehq.com/embed/@andyreagan/bmr-calculator?cell=*" loading="lazy" title="BMR Calculator"></iframe>
-  <script src="/footer.js"></script>
+<div class="page">
+  <div class="card">
+    <div id="observablehq-description_md-30eb5183"></div>
+    <div id="observablehq-viewof-gender-30eb5183"></div>
+    <div id="observablehq-viewof-age-30eb5183"></div>
+    <div id="observablehq-weight_vw-30eb5183"></div>
+    <div id="observablehq-height_vw-30eb5183"></div>
+    <div id="observablehq-result_md-30eb5183"></div>
+  </div>
+  <div class="observable-link">Built on <a href="https://observablehq.com/@andyreagan/bmr-calculator" target="_blank" rel="noopener">Observable</a></div>
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@observablehq/inspector@5/dist/inspector.css">
+<script type="module">
+import {Runtime, Inspector} from "https://cdn.jsdelivr.net/npm/@observablehq/runtime@5/dist/runtime.js";
+import define from "https://api.observablehq.com/@andyreagan/bmr-calculator.js?v=4";
+new Runtime().module(define, name => {
+  if (name === "description_md") return new Inspector(document.querySelector("#observablehq-description_md-30eb5183"));
+  if (name === "viewof gender") return new Inspector(document.querySelector("#observablehq-viewof-gender-30eb5183"));
+  if (name === "viewof age") return new Inspector(document.querySelector("#observablehq-viewof-age-30eb5183"));
+  if (name === "weight_vw") return new Inspector(document.querySelector("#observablehq-weight_vw-30eb5183"));
+  if (name === "height_vw") return new Inspector(document.querySelector("#observablehq-height_vw-30eb5183"));
+  if (name === "result_md") return new Inspector(document.querySelector("#observablehq-result_md-30eb5183"));
+});
+</script>
+<script src="/footer.js"></script>
 </body>
 </html>

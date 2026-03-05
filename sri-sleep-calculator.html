@@ -8,23 +8,30 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
-      --bg:#0d1117; --surface:#161b22; --border:#30363d;
-      --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff;
-      --green:#3fb950; --yellow:#d29922; --red:#f85149;
-      --sleep:#1f6feb; --wake:#0d1117;
+      --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+      --mid:#666; --muted:#999; --border:#ddd; --accent:#e74c3c;
+      --green:#27ae60; --yellow:#d29922; --red:#c0392b;
+      --sleep:#2980b9; --wake:#f0ede8;
     }
     body{
-      font-family:ui-monospace,monospace;
-      background:var(--bg); color:var(--text);
+      font-family:system-ui,sans-serif;
+      background:var(--bg); color:var(--dark);
       min-height:100vh; padding:2rem 1rem;
     }
-    .page{max-width:860px;margin:0 auto;}
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0;
+      background-image:repeating-linear-gradient(
+        45deg, transparent, transparent 20px,
+        rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+      );
+    }
+    .page{max-width:860px;margin:0 auto;position:relative;z-index:1;}
 
     header{margin-bottom:2.5rem;}
     h1{
-      font-family:Georgia,serif;
+      font-weight:700;
       font-size:clamp(2rem,5vw,3rem); letter-spacing:-0.02em;
-      color:var(--text); line-height:1.1;
+      color:var(--dark); line-height:1.1;
     }
     h1 em{font-style:italic; color:var(--accent);}
     .subtitle{margin-top:.5rem; font-size:.75rem; color:var(--muted); letter-spacing:.05em;}
@@ -33,11 +40,11 @@
     @media(max-width:600px){.layout{grid-template-columns:1fr;}}
 
     .card{
-      background:var(--surface); border:1px solid var(--border);
-      border-radius:8px; padding:1.25rem;
+      background:var(--surface); border:2px solid var(--dark);
+      border-radius:4px; padding:1.25rem;
     }
     .card-title{
-      font-size:.65rem; letter-spacing:.12em; text-transform:uppercase;
+      font-size:.65rem; font-weight:600; letter-spacing:.12em; text-transform:uppercase;
       color:var(--muted); margin-bottom:1rem; padding-bottom:.75rem;
       border-bottom:1px solid var(--border);
     }
@@ -47,21 +54,21 @@
       display:grid; grid-template-columns:3rem 1fr 1fr;
       align-items:center; gap:.5rem; margin-bottom:.75rem;
     }
-    .day-label{font-size:.75rem; color:var(--muted);}
+    .day-label{font-size:.75rem; color:var(--mid); font-weight:600;}
     .time-input{
-      font-family:ui-monospace,monospace; font-size:.8rem;
-      background:#0d1117; border:1px solid var(--border);
-      border-radius:4px; color:var(--text);
+      font-family:system-ui,sans-serif; font-size:.8rem;
+      background:#fafafa; border:2px solid var(--border);
+      border-radius:3px; color:var(--dark);
       padding:.35rem .5rem; width:100%;
       transition:border-color .15s;
     }
-    .time-input:focus{outline:none; border-color:var(--accent);}
-    .input-label{font-size:.6rem; color:var(--muted); text-align:center; margin-bottom:2px;}
+    .time-input:focus{outline:none; border-color:var(--dark);}
+    .input-label{font-size:.6rem; color:var(--muted); text-align:center; margin-bottom:2px; font-weight:600; letter-spacing:.08em; text-transform:uppercase;}
 
     /* SRI score */
     .sri-panel{text-align:center; padding:1.5rem 1rem;}
     .sri-number{
-      font-family:Georgia,serif;
+      font-weight:700;
       font-size:5rem; line-height:1;
       transition:color .4s;
     }
@@ -75,28 +82,28 @@
       background:linear-gradient(90deg,var(--red),var(--yellow),var(--green));
       transition:width .4s ease;
     }
-    .sri-label{font-size:.75rem; color:var(--muted);}
+    .sri-label{font-size:.75rem; color:var(--mid); font-weight:600;}
     .sri-interp{
       font-size:.85rem; margin-top:.5rem;
-      font-family:Georgia,serif; font-style:italic;
+      font-style:italic; color:var(--mid);
     }
 
     /* Visualization */
     .vis-wrap{margin-top:1rem;}
     .vis-row{display:flex; align-items:center; margin-bottom:6px; gap:.5rem;}
-    .vis-day{font-size:.65rem; color:var(--muted); width:2.5rem; flex-shrink:0;}
+    .vis-day{font-size:.65rem; color:var(--muted); width:2.5rem; flex-shrink:0; font-weight:600;}
     .vis-bar{
-      flex:1; height:20px; background:#1c2128;
+      flex:1; height:20px; background:#e8e4de;
       border-radius:3px; position:relative; overflow:hidden;
     }
     .vis-sleep{
       position:absolute; top:0; height:100%;
-      background:var(--sleep); border-radius:2px;
+      background:var(--sleep); border-radius:2px; opacity:.7;
       transition:left .3s, width .3s;
     }
     .vis-ticks{
       display:flex; margin-left:3rem; padding-left:.5rem;
-      font-size:.55rem; color:var(--muted);
+      font-size:.55rem; color:var(--muted); font-weight:600;
       justify-content:space-between;
     }
 
@@ -105,16 +112,16 @@
       font-size:.7rem; color:var(--muted); line-height:1.8;
       margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border);
     }
-    .formula code{color:var(--accent);}
+    .formula code{color:var(--accent); font-size:.72rem;}
 
     .reset-btn{
-      font-family:ui-monospace,monospace; font-size:.7rem;
-      letter-spacing:.08em; text-transform:uppercase;
-      background:transparent; border:1px solid var(--border);
-      color:var(--muted); padding:.4rem .9rem; border-radius:4px;
+      font-family:system-ui,sans-serif; font-size:.7rem;
+      font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+      background:transparent; border:2px solid var(--border);
+      color:var(--mid); padding:.4rem .9rem; border-radius:3px;
       cursor:pointer; margin-top:1rem; transition:all .15s;
     }
-    .reset-btn:hover{border-color:var(--accent); color:var(--accent);}
+    .reset-btn:hover{border-color:var(--dark); color:var(--dark);}
   </style>
 </head>
 <body>
@@ -155,9 +162,16 @@
         </div>
         <div class="vis-wrap" id="visWrap"></div>
         <div class="formula">
-          <strong style="color:var(--text)">SRI formula:</strong><br>
+          <strong style="color:var(--dark)">SRI formula:</strong><br>
           <code>SRI = −100 + (200 / (M × (N−1))) × Σ matches</code><br>
           M = epochs/day (48 × 30-min), N = days, matches = consecutive days in same state
+        </div>
+        <div class="formula" style="margin-top:.75rem;">
+          <strong style="color:var(--dark)">Reference:</strong><br>
+          Fischer D, Klerman EB, Phillips AJK. (2021). &ldquo;Measuring sleep regularity: theoretical properties and practical usage of existing metrics.&rdquo;
+          <em>Sleep.</em>
+          <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8503839/" target="_blank" rel="noopener"
+             style="color:var(--accent);text-decoration:none;">PMC8503839</a>
         </div>
       </div>
     </div>
@@ -210,14 +224,13 @@ function timeToMin(t) {
 }
 
 function buildEpochs(bed,wake) {
-  // 48 epochs (30 min each) — 1=awake, 0=asleep
   const epochs = new Array(48).fill(1);
   const b = timeToMin(bed);
   const w = timeToMin(wake);
   for (let i=0;i<48;i++) {
     const minStart = i*30;
     const minEnd = minStart+30;
-    if (b > w) { // crosses midnight
+    if (b > w) {
       if (minStart >= b || minEnd <= w) epochs[i] = 0;
     } else {
       if (minStart >= b && minEnd <= w) epochs[i] = 0;
@@ -242,10 +255,10 @@ function compute() {
   el.textContent = sriRound;
 
   let color, label, interp;
-  if (sri >= 85) { color='#3fb950'; label='Excellent'; interp='Very consistent sleep pattern'; }
-  else if (sri >= 70) { color='#58a6ff'; label='Good'; interp='Mostly regular schedule'; }
+  if (sri >= 85) { color='#27ae60'; label='Excellent'; interp='Very consistent sleep pattern'; }
+  else if (sri >= 70) { color='#2980b9'; label='Good'; interp='Mostly regular schedule'; }
   else if (sri >= 50) { color='#d29922'; label='Fair'; interp='Some inconsistency — consider regularizing'; }
-  else { color='#f85149'; label='Poor'; interp='Highly irregular pattern — impacts health'; }
+  else { color='#c0392b'; label='Poor'; interp='Highly irregular pattern — impacts health'; }
 
   el.style.color = color;
   document.getElementById('sriFill').style.width = Math.max(0,sriRound)+'%';
@@ -291,6 +304,6 @@ function renderVis(epochsAll) {
 
 init();
 </script>
-  <script src="/footer.js"></script>
+<script src="/footer.js"></script>
 </body>
 </html>

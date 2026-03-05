@@ -16,7 +16,7 @@
       font-family:system-ui,sans-serif;
       background:var(--bg); color:var(--dark);
       min-height:100vh; display:flex; flex-direction:column;
-      align-items:center; justify-content:center; padding:2rem 1rem;
+      align-items:center; padding:2rem 1rem;
     }
     /* diagonal stripe background */
     body::before{
@@ -27,7 +27,7 @@
       );
     }
 
-    .page{position:relative;z-index:1;width:min(580px,100%);}
+    .page{position:relative;z-index:1;width:min(580px,100%);margin:auto 0;}
 
     header{margin-bottom:2rem; text-align:center;}
     h1{
@@ -85,16 +85,6 @@
     }
     .unit-btn.active{background:var(--dark); color:#fff; border-color:var(--dark);}
 
-    /* Calculate button */
-    .calc-btn{
-      font-weight:700;
-      font-size:1rem; letter-spacing:.12em; text-transform:uppercase;
-      width:100%; padding:.75rem; margin-top:.5rem;
-      background:var(--dark); color:#fff; border:none;
-      border-radius:3px; cursor:pointer; transition:background .15s;
-    }
-    .calc-btn:hover{background:var(--accent);}
-
     /* Result */
     .result{
       margin-top:1.5rem; padding:1.5rem;
@@ -130,6 +120,7 @@
       line-height:1.6; border-left:3px solid var(--border);
       padding-left:.75rem;
     }
+
   </style>
 </head>
 <body>
@@ -148,33 +139,31 @@
     <div id="panelFtoV">
       <div class="field">
         <div class="field-label">FTP <span class="field-hint">Functional Threshold Power</span></div>
-        <input type="number" id="ftpInput" placeholder="280" min="50" max="600">
+        <input type="number" id="ftpInput" value="280" min="50" max="600" oninput="calcFtoV()">
       </div>
       <div class="field">
         <div class="field-label">Body weight</div>
         <div class="input-row">
-          <input type="number" id="weightFV" placeholder="70" min="30" max="200">
+          <input type="number" id="weightFV" value="70" min="30" max="200" oninput="calcFtoV()">
           <button class="unit-btn active" id="wUnitFV_kg" onclick="setWeightUnit('FV','kg')">kg</button>
           <button class="unit-btn" id="wUnitFV_lbs" onclick="setWeightUnit('FV','lbs')">lbs</button>
         </div>
       </div>
-      <button class="calc-btn" onclick="calcFtoV()">Calculate VO₂max →</button>
     </div>
 
     <div id="panelVtoF" style="display:none">
       <div class="field">
         <div class="field-label">VO₂max <span class="field-hint">ml/kg/min</span></div>
-        <input type="number" id="vo2Input" placeholder="55" min="20" max="100">
+        <input type="number" id="vo2Input" value="55" min="20" max="100" oninput="calcVtoF()">
       </div>
       <div class="field">
         <div class="field-label">Body weight</div>
         <div class="input-row">
-          <input type="number" id="weightVF" placeholder="70" min="30" max="200">
+          <input type="number" id="weightVF" value="70" min="30" max="200" oninput="calcVtoF()">
           <button class="unit-btn active" id="wUnitVF_kg" onclick="setWeightUnit('VF','kg')">kg</button>
           <button class="unit-btn" id="wUnitVF_lbs" onclick="setWeightUnit('VF','lbs')">lbs</button>
         </div>
       </div>
-      <button class="calc-btn" onclick="calcVtoF()">Calculate FTP →</button>
     </div>
 
     <div class="result" id="result">
@@ -202,7 +191,7 @@
     document.getElementById('panelVtoF').style.display = m==='vtof'?'':'none';
     document.getElementById('btnFtoV').classList.toggle('active', m==='ftov');
     document.getElementById('btnVtoF').classList.toggle('active', m==='vtof');
-    document.getElementById('result').classList.remove('show');
+    if (m==='ftov') calcFtoV(); else calcVtoF();
   }
 
   function setWeightUnit(panel, unit) {
@@ -210,10 +199,12 @@
       wUnitFV=unit;
       document.getElementById('wUnitFV_kg').classList.toggle('active',unit==='kg');
       document.getElementById('wUnitFV_lbs').classList.toggle('active',unit==='lbs');
+      calcFtoV();
     } else {
       wUnitVF=unit;
       document.getElementById('wUnitVF_kg').classList.toggle('active',unit==='kg');
       document.getElementById('wUnitVF_lbs').classList.toggle('active',unit==='lbs');
+      calcVtoF();
     }
   }
 
@@ -222,16 +213,12 @@
   function calcFtoV() {
     const ftp = parseFloat(document.getElementById('ftpInput').value);
     const wRaw = parseFloat(document.getElementById('weightFV').value);
-    if (isNaN(ftp)||isNaN(wRaw)) return;
+    if (isNaN(ftp) || isNaN(wRaw)) { document.getElementById('result').classList.remove('show'); return; }
     const wKg = toKg(wRaw, wUnitFV);
     const wPerKg = ftp/wKg;
-
-    // Central estimate: FU = 0.75
     const vo2Central = (wPerKg/0.75)*10.8 + 7;
-    // 90% CI: FU range 0.70 to 0.86
     const vo2Low = (wPerKg/0.86)*10.8 + 7;
     const vo2High = (wPerKg/0.70)*10.8 + 7;
-
     showResult(
       'Estimated VO₂max',
       vo2Central.toFixed(1), 'ml/kg/min',
@@ -245,15 +232,12 @@
   function calcVtoF() {
     const vo2 = parseFloat(document.getElementById('vo2Input').value);
     const wRaw = parseFloat(document.getElementById('weightVF').value);
-    if (isNaN(vo2)||isNaN(wRaw)) return;
+    if (isNaN(vo2) || isNaN(wRaw)) { document.getElementById('result').classList.remove('show'); return; }
     const wKg = toKg(wRaw, wUnitVF);
-
-    // VO2max power (W/kg) = (vo2 - 7) / 10.8
     const vo2WperKg = (vo2 - 7) / 10.8;
     const ftpCentral = vo2WperKg * 0.75 * wKg;
     const ftpLow = vo2WperKg * 0.70 * wKg;
     const ftpHigh = vo2WperKg * 0.86 * wKg;
-
     showResult(
       'Estimated FTP',
       Math.round(ftpCentral).toString(), 'watts',
@@ -270,6 +254,9 @@
     document.getElementById('resultSecondary').innerHTML = secondary;
     document.getElementById('result').classList.add('show');
   }
+
+  // Compute immediately on load
+  calcFtoV();
 </script>
   <script src="/footer.js"></script>
 </body>
