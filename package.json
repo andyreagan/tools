@@ -1,25 +1,16 @@
 {
   "name": "tools",
   "version": "1.0.0",
-  "description": "I've had collections of these tools around, inspired by [Simow W](https://simonwillison.net/2025/Dec/10/html-tools/) and assisted by Claude I'm going to put them in one place.",
-  "main": "index.js",
-  "scripts": {
-    "build": "./build.sh",
-    "download": "./download.sh"
-  },
+  "description": "I've had collections of these tools around, inspired by Simon Willison and assisted by Claude I'm going to put them in one place.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/andyreagan/tools.git"
   },
   "keywords": [],
-  "author": "",
+  "author": "Andy Reagan",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/andyreagan/tools/issues"
   },
-  "homepage": "https://github.com/andyreagan/tools#readme",
-  "dependencies": {
-    "@observablehq/notebook-kit": "^1.5.2"
-  }
+  "homepage": "https://github.com/andyreagan/tools#readme"
 }
