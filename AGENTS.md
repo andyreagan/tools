@@ -55,9 +55,11 @@ tools/
   index.html           ← add a card linking to my-calculator/
 ```
 
-Observable notebooks that can't be made self-contained use this format: the
-`index.html` is a thin iframe wrapper pointing to the live Observable embed
-URL (`https://observablehq.com/embed/@andyreagan/<notebook>?cell=*`).
+Observable notebooks use this format: the `index.html` is a thin iframe
+wrapper pointing to the live Observable embed URL
+(`https://observablehq.com/embed/@andyreagan/<notebook>?cell=*`).
+If a directory tool grows to just one file with no local assets, flatten it
+back to a single `tool-name.html` at the root.
 
 ---
 
