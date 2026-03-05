@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WAV Recorder</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+      --mid:#666; --muted:#999; --border:#ddd; --accent:#e74c3c;
+      --green:#27ae60;
+    }
+    body{
+      font-family:system-ui,sans-serif;
+      background:var(--bg); color:var(--dark);
+      min-height:100vh; display:flex; flex-direction:column;
+      align-items:center; padding:2rem 1rem;
+    }
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0;
+      background-image:repeating-linear-gradient(
+        45deg, transparent, transparent 20px,
+        rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+      );
+    }
+    .page{position:relative;z-index:1;width:min(500px,100%);margin:auto 0;}
+
+    header{margin-bottom:2rem; text-align:center;}
+    h1{
+      font-weight:700;
+      font-size:clamp(2.2rem,7vw,3.5rem); text-transform:uppercase;
+      letter-spacing:.04em; line-height:1;
+    }
+    .tagline{
+      font-size:.8rem; color:var(--muted); letter-spacing:.1em;
+      text-transform:uppercase; margin-top:.4rem;
+    }
+
+    .card{
+      background:var(--surface); border:2px solid var(--dark);
+      border-radius:4px; padding:2rem;
+    }
+
+    .status{
+      font-size:.75rem; font-weight:600; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted); margin-bottom:.6rem;
+    }
+    .timer{
+      font-size:2.5rem; font-weight:700; color:var(--dark);
+      margin-bottom:1.25rem; font-variant-numeric:tabular-nums;
+    }
+
+    .visualizer{
+      height:60px; background:#fafafa;
+      border:2px solid var(--border); border-radius:3px;
+      margin-bottom:1.25rem; overflow:hidden;
+    }
+    canvas{width:100%; height:100%;}
+
+    .controls{display:flex; gap:.5rem; margin-bottom:1rem;}
+
+    button{
+      font-family:system-ui,sans-serif;
+      font-size:.85rem; font-weight:600; letter-spacing:.08em;
+      text-transform:uppercase;
+      padding:.6rem 1.4rem; border:2px solid var(--border);
+      border-radius:3px; cursor:pointer;
+      background:transparent; color:var(--mid);
+      transition:all .15s;
+    }
+    button:hover:not(:disabled){
+      border-color:var(--dark); color:var(--dark);
+    }
+    button:disabled{opacity:.4; cursor:not-allowed;}
+
+    #recordBtn{
+      background:var(--accent); color:#fff;
+      border-color:var(--accent);
+    }
+    #recordBtn:hover:not(:disabled){
+      background:#c0392b; border-color:#c0392b;
+    }
+    #recordBtn.recording{
+      background:var(--green); border-color:var(--green);
+      animation:pulse 1s infinite;
+    }
+    @keyframes pulse{
+      0%,100%{opacity:1}
+      50%{opacity:.7}
+    }
+
+    #downloadBtn.ready{
+      background:var(--dark); color:#fff;
+      border-color:var(--dark);
+    }
+
+    audio{
+      width:100%; margin-top:1rem;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>WAV Recorder</h1>
+    <div class="tagline">Record &amp; download uncompressed audio</div>
+  </header>
+
+  <div class="card">
+    <div class="status" id="status">Click Record to start</div>
+    <div class="timer" id="timer">00:00</div>
+    <div class="visualizer">
+      <canvas id="visualizer"></canvas>
+    </div>
+    <div class="controls">
+      <button id="recordBtn">Record</button>
+      <button id="downloadBtn" disabled>Download WAV</button>
+    </div>
+    <audio id="audioPlayback" controls style="display: none;"></audio>
+  </div>
+</div>
+
+<script>
+  const recordBtn = document.getElementById('recordBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const statusEl = document.getElementById('status');
+  const timerEl = document.getElementById('timer');
+  const audioPlayback = document.getElementById('audioPlayback');
+  const canvas = document.getElementById('visualizer');
+  const canvasCtx = canvas.getContext('2d');
+
+  let mediaRecorder;
+  let audioContext;
+  let analyser;
+  let source;
+  let animationId;
+  let audioChunks = [];
+  let rawAudioData = [];
+  let isRecording = false;
+  let timerInterval;
+  let startTime;
+  let scriptProcessor;
+
+  function resizeCanvas() {
+    canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+    canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+    canvasCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  function drawVisualizer() {
+    if (!analyser) return;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    analyser.getByteFrequencyData(dataArray);
+    const width = canvas.offsetWidth;
+    const height = canvas.offsetHeight;
+
+    canvasCtx.fillStyle = '#fafafa';
+    canvasCtx.fillRect(0, 0, width, height);
+
+    const barWidth = (width / bufferLength) * 2.5;
+    let x = 0;
+    for (let i = 0; i < bufferLength; i++) {
+      const barHeight = (dataArray[i] / 255) * height;
+      canvasCtx.fillStyle = isRecording
+        ? getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
+        : getComputedStyle(document.documentElement).getPropertyValue('--dark').trim();
+      canvasCtx.fillRect(x, height - barHeight, barWidth, barHeight);
+      x += barWidth + 1;
+    }
+    animationId = requestAnimationFrame(drawVisualizer);
+  }
+
+  function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+  }
+
+  function updateTimer() {
+    const elapsed = (Date.now() - startTime) / 1000;
+    timerEl.textContent = formatTime(elapsed);
+  }
+
+  function encodeWAV(samples, sampleRate) {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(view, 36, 'data');
+    view.setUint32(40, samples.length * 2, true);
+    floatTo16BitPCM(view, 44, samples);
+    return new Blob([buffer], { type: 'audio/wav' });
+  }
+
+  function writeString(view, offset, string) {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  }
+
+  function floatTo16BitPCM(view, offset, input) {
+    for (let i = 0; i < input.length; i++, offset += 2) {
+      const s = Math.max(-1, Math.min(1, input[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+  }
+
+  function mergeBuffers(buffers) {
+    const length = buffers.reduce((acc, buf) => acc + buf.length, 0);
+    const result = new Float32Array(length);
+    let offset = 0;
+    for (const buffer of buffers) {
+      result.set(buffer, offset);
+      offset += buffer.length;
+    }
+    return result;
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      source = audioContext.createMediaStreamSource(stream);
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+
+      const bufferSize = 4096;
+      scriptProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+      rawAudioData = [];
+
+      scriptProcessor.onaudioprocess = (e) => {
+        if (isRecording) {
+          const inputData = e.inputBuffer.getChannelData(0);
+          rawAudioData.push(new Float32Array(inputData));
+        }
+      };
+
+      source.connect(analyser);
+      source.connect(scriptProcessor);
+      scriptProcessor.connect(audioContext.destination);
+
+      isRecording = true;
+      startTime = Date.now();
+      timerInterval = setInterval(updateTimer, 100);
+
+      recordBtn.textContent = 'Stop';
+      recordBtn.classList.add('recording');
+      statusEl.textContent = 'Recording…';
+      downloadBtn.disabled = true;
+      downloadBtn.classList.remove('ready');
+      audioPlayback.style.display = 'none';
+
+      drawVisualizer();
+    } catch (err) {
+      statusEl.textContent = 'Error: ' + err.message;
+      console.error('Error accessing microphone:', err);
+    }
+  }
+
+  function stopRecording() {
+    isRecording = false;
+    clearInterval(timerInterval);
+
+    if (scriptProcessor) scriptProcessor.disconnect();
+    if (source) source.disconnect();
+    if (animationId) cancelAnimationFrame(animationId);
+
+    const sampleRate = audioContext.sampleRate;
+    const mergedData = mergeBuffers(rawAudioData);
+    const wavBlob = encodeWAV(mergedData, sampleRate);
+
+    const audioUrl = URL.createObjectURL(wavBlob);
+    audioPlayback.src = audioUrl;
+    audioPlayback.style.display = 'block';
+
+    downloadBtn.disabled = false;
+    downloadBtn.classList.add('ready');
+    downloadBtn.onclick = () => {
+      const a = document.createElement('a');
+      a.href = audioUrl;
+      a.download = `recording-${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.wav`;
+      a.click();
+    };
+
+    recordBtn.textContent = 'Record';
+    recordBtn.classList.remove('recording');
+    statusEl.textContent = 'Recording complete — play back or download';
+
+    if (audioContext) audioContext.close();
+  }
+
+  recordBtn.addEventListener('click', () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  });
+</script>
+<script src="/footer.js"></script>
+</body>
+</html>
