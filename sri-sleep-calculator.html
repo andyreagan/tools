@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Sleep Regularity Index</title>
-  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
@@ -14,7 +14,7 @@
       --sleep:#1f6feb; --wake:#0d1117;
     }
     body{
-      font-family:'JetBrains Mono',monospace;
+      font-family:ui-monospace,monospace;
       background:var(--bg); color:var(--text);
       min-height:100vh; padding:2rem 1rem;
     }
@@ -22,7 +22,7 @@
 
     header{margin-bottom:2.5rem;}
     h1{
-      font-family:'Crimson Pro',serif; font-weight:300;
+      font-family:Georgia,serif;
       font-size:clamp(2rem,5vw,3rem); letter-spacing:-0.02em;
       color:var(--text); line-height:1.1;
     }
@@ -49,7 +49,7 @@
     }
     .day-label{font-size:.75rem; color:var(--muted);}
     .time-input{
-      font-family:'JetBrains Mono',monospace; font-size:.8rem;
+      font-family:ui-monospace,monospace; font-size:.8rem;
       background:#0d1117; border:1px solid var(--border);
       border-radius:4px; color:var(--text);
       padding:.35rem .5rem; width:100%;
@@ -61,7 +61,7 @@
     /* SRI score */
     .sri-panel{text-align:center; padding:1.5rem 1rem;}
     .sri-number{
-      font-family:'Crimson Pro',serif; font-weight:300;
+      font-family:Georgia,serif;
       font-size:5rem; line-height:1;
       transition:color .4s;
     }
@@ -78,7 +78,7 @@
     .sri-label{font-size:.75rem; color:var(--muted);}
     .sri-interp{
       font-size:.85rem; margin-top:.5rem;
-      font-family:'Crimson Pro',serif; font-style:italic;
+      font-family:Georgia,serif; font-style:italic;
     }
 
     /* Visualization */
@@ -108,7 +108,7 @@
     .formula code{color:var(--accent);}
 
     .reset-btn{
-      font-family:'JetBrains Mono',monospace; font-size:.7rem;
+      font-family:ui-monospace,monospace; font-size:.7rem;
       letter-spacing:.08em; text-transform:uppercase;
       background:transparent; border:1px solid var(--border);
       color:var(--muted); padding:.4rem .9rem; border-radius:4px;

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Chess Timer</title>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -13,7 +13,7 @@
       --gold-light: #e8c97a; --danger: #c0392b;
     }
     body {
-      font-family: 'DM Mono', monospace;
+      font-family: ui-monospace,monospace;
       background: var(--ebony);
       min-height: 100vh;
       display: flex; flex-direction: column;
@@ -48,7 +48,7 @@
     .clock.active .clock-inner { background: var(--ivory); box-shadow: 0 0 0 3px var(--gold) inset; }
     .clock.flagged .clock-inner { background: #fff0f0; box-shadow: 0 0 0 3px var(--danger) inset; }
     .player-label {
-      font-family: 'Playfair Display', serif;
+      font-family: Georgia,serif;
       font-size: 0.85rem; letter-spacing: 0.15em;
       text-transform: uppercase; color: var(--mid); margin-bottom: 8px;
     }
@@ -70,7 +70,7 @@
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
     }
     .btn {
-      font-family: 'DM Mono', monospace;
+      font-family: ui-monospace,monospace;
       font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
       border: 1px solid #444; background: transparent; color: var(--ivory);
       padding: 7px 14px; border-radius: 6px; cursor: pointer; transition: all 0.15s;
@@ -87,7 +87,7 @@
     .settings-title { font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--mid); margin-bottom: 14px; }
     .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
     .preset-btn {
-      font-family: 'DM Mono', monospace; font-size: 0.72rem;
+      font-family: ui-monospace,monospace; font-size: 0.72rem;
       padding: 6px 12px; border-radius: 6px; border: 1px solid #444;
       background: transparent; color: var(--ivory); cursor: pointer; transition: all 0.15s;
     }
@@ -95,7 +95,7 @@
     .custom-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .custom-row label { font-size: 0.72rem; color: var(--mid); letter-spacing: 0.05em; }
     .custom-row input {
-      font-family: 'DM Mono', monospace; font-size: 0.85rem;
+      font-family: ui-monospace,monospace; font-size: 0.85rem;
       width: 56px; padding: 6px 10px;
       background: #1a1a18; border: 1px solid #444; border-radius: 6px;
       color: var(--ivory); text-align: center;

@@ -5,6 +5,25 @@ agents (and humans) can follow them consistently.
 
 ---
 
+## Style philosophy
+
+Inspired by [bettermotherfuckingwebsite.com](http://bettermotherfuckingwebsite.com/):
+keep it simple, load nothing you don't need.
+
+- **No web fonts.** Use the system font stack: `system-ui, sans-serif` (or
+  `Georgia, serif` if a serif feel is wanted). Zero font network requests.
+- **Minimal CSS.** A handful of rules for readable line length, comfortable
+  padding, and legible font size. No frameworks, no resets beyond `box-sizing`.
+- **No CDN scripts unless the tool genuinely requires them.** Don't pull in
+  libraries for things that can be done in 10 lines of vanilla JS.
+- **No tracking, no analytics, no cookies.**
+
+The goal is a page that loads in one round-trip (the HTML file itself) for
+self-contained tools, and two (HTML + `footer.js`) for any tool that links
+back to source.
+
+---
+
 ## Tool formats
 
 There are two supported layouts. Choose the simplest one that works.

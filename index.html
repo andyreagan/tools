@@ -4,7 +4,6 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Andy's HTML Tools</title>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400&display=swap" rel="stylesheet"/>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
@@ -12,7 +11,7 @@
       --text:#f0ede8; --muted:#777; --accent:#e74c3c;
     }
     body{
-      font-family:'Barlow',sans-serif; font-weight:300;
+      font-family:system-ui,sans-serif;
       background:var(--bg); color:var(--text);
       min-height:100vh; padding:3rem 1.5rem;
     }
@@ -20,19 +19,15 @@
 
     header{margin-bottom:3.5rem; border-bottom:1px solid var(--border); padding-bottom:2rem;}
     .site-name{
-      font-family:'Barlow Condensed',sans-serif; font-weight:800;
       font-size:clamp(2.5rem,8vw,4.5rem); text-transform:uppercase;
-      letter-spacing:.02em; line-height:1;
+      font-weight:800; letter-spacing:.02em; line-height:1;
     }
     .site-name span{color:var(--accent);}
     .site-desc{
       margin-top:.75rem; font-size:.85rem; color:var(--muted);
       letter-spacing:.06em; text-transform:uppercase;
     }
-    .domain{
-      margin-top:.5rem; font-family:'Barlow Condensed',sans-serif;
-      font-size:.9rem; color:var(--muted); letter-spacing:.08em;
-    }
+    .domain{margin-top:.5rem; font-size:.9rem; color:var(--muted);}
 
     .tools-grid{
       display:grid;
@@ -58,23 +53,20 @@
     .tool-card:hover::after{color:var(--accent); transform:translateX(3px);}
 
     .tool-tag{
-      font-family:'Barlow Condensed',sans-serif; font-size:.65rem;
-      font-weight:600; letter-spacing:.15em; text-transform:uppercase;
+      font-size:.65rem; font-weight:700;
+      letter-spacing:.15em; text-transform:uppercase;
       color:var(--accent); margin-bottom:.6rem;
     }
     .tool-name{
-      font-family:'Barlow Condensed',sans-serif; font-weight:700;
-      font-size:1.4rem; letter-spacing:.02em; line-height:1.1;
+      font-weight:700; font-size:1.2rem; line-height:1.2;
       margin-bottom:.5rem;
     }
-    .tool-desc{
-      font-size:.8rem; color:var(--muted); line-height:1.6;
-    }
+    .tool-desc{font-size:.8rem; color:var(--muted); line-height:1.6;}
 
     footer{
       margin-top:3rem; padding-top:1.5rem;
       border-top:1px solid var(--border);
-      font-size:.7rem; color:var(--muted); letter-spacing:.06em;
+      font-size:.7rem; color:var(--muted);
     }
   </style>
 </head>
