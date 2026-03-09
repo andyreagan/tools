@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Board Cut Optimizer</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+      --mid:#666; --muted:#999; --border:#ddd; --accent:#e74c3c;
+      --green:#27ae60; --blue:#2980b9;
+    }
+    body{
+      font-family:system-ui,sans-serif;
+      background:var(--bg); color:var(--dark);
+      min-height:100vh; display:flex; flex-direction:column;
+      align-items:center; padding:2rem 1rem;
+    }
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0;
+      background-image:repeating-linear-gradient(
+        45deg, transparent, transparent 20px,
+        rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+      );
+    }
+    .page{position:relative;z-index:1;width:min(720px,100%);margin:auto 0;}
+
+    header{margin-bottom:2rem; text-align:center;}
+    h1{
+      font-weight:700;
+      font-size:clamp(1.8rem,6vw,3rem); text-transform:uppercase;
+      letter-spacing:.04em; line-height:1;
+    }
+    .tagline{
+      font-size:.8rem; color:var(--muted); letter-spacing:.1em;
+      text-transform:uppercase; margin-top:.4rem;
+    }
+    h2{font-size:1.1rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-bottom:1rem;}
+
+    .card{
+      background:var(--surface); border:2px solid var(--dark);
+      border-radius:4px; padding:2rem; margin-bottom:1rem;
+    }
+
+    /* Labels */
+    .field-label{
+      font-size:.75rem; font-weight:600; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted); margin-bottom:.4rem;
+    }
+
+    /* Inputs */
+    input[type=number]{
+      font-family:system-ui,sans-serif;
+      font-size:1rem; padding:.4rem .6rem;
+      border:2px solid var(--border); border-radius:3px;
+      background:#fafafa; color:var(--dark); width:100%;
+    }
+    input[type=number]:focus{outline:none; border-color:var(--dark);}
+
+    /* Buttons */
+    .btn{
+      font-family:system-ui,sans-serif;
+      font-size:.8rem; font-weight:600; letter-spacing:.08em;
+      text-transform:uppercase;
+      padding:.5rem 1.2rem; border:2px solid var(--border);
+      border-radius:3px; cursor:pointer;
+      background:transparent; color:var(--mid);
+      transition:all .15s;
+    }
+    .btn:hover{border-color:var(--dark); color:var(--dark);}
+    .btn-primary{background:var(--dark); color:#fff; border-color:var(--dark);}
+    .btn-primary:hover{background:#333;}
+    .btn-primary:disabled{background:var(--border); border-color:var(--border); color:var(--muted); cursor:not-allowed;}
+    .btn-accent{background:var(--accent); color:#fff; border-color:var(--accent);}
+    .btn-accent:hover{background:#c0392b; border-color:#c0392b;}
+    .btn-sm{padding:.3rem .7rem; font-size:.7rem;}
+    .btn-remove{
+      width:30px; height:30px; padding:0; display:flex;
+      align-items:center; justify-content:center; font-size:1.1rem;
+      border-color:var(--border); color:var(--muted);
+    }
+    .btn-remove:hover{border-color:var(--accent); color:var(--accent);}
+
+    /* Section headers */
+    .section-header{
+      display:flex; justify-content:space-between; align-items:center;
+      margin-bottom:.75rem;
+    }
+
+    /* Board / Cut rows */
+    .item-row{
+      display:flex; gap:.5rem; align-items:flex-end;
+      margin-bottom:.5rem;
+    }
+    .input-col{display:flex; flex-direction:column; flex:1; min-width:0;}
+    .input-col.narrow{flex:0 0 70px;}
+    .times{color:var(--muted); font-weight:700; padding-bottom:.5rem; font-size:.9rem;}
+
+    /* Settings */
+    .settings-row{
+      display:flex; gap:1.5rem; flex-wrap:wrap; margin-bottom:1rem;
+      padding-top:1rem; border-top:1px solid var(--border);
+    }
+    .settings-row .input-col{min-width:140px;}
+
+    /* Algorithm selector */
+    .algo-group{
+      margin-bottom:1rem; padding-top:1rem; border-top:1px solid var(--border);
+    }
+    .radio-row{display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.5rem;}
+    .radio-label{
+      display:flex; align-items:center; gap:.4rem;
+      padding:.4rem .8rem; border:2px solid var(--border);
+      border-radius:3px; cursor:pointer; font-size:.8rem;
+      font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+      color:var(--mid); transition:all .15s;
+    }
+    .radio-label:has(input:checked){
+      background:var(--dark); color:#fff; border-color:var(--dark);
+    }
+    .radio-label input{display:none;}
+
+    /* Action buttons */
+    .actions{display:flex; gap:.5rem; margin-top:1.25rem;}
+
+    /* Error */
+    .error{
+      background:#fff5f5; border:2px solid var(--accent);
+      border-radius:3px; padding:1rem; margin-bottom:1rem;
+      color:var(--accent); font-size:.9rem;
+    }
+
+    /* Results */
+    .results-info{font-size:.85rem; color:var(--muted); margin-bottom:1rem;}
+    .result-card{
+      background:var(--surface); border:2px solid var(--dark);
+      border-radius:4px; padding:1.5rem; margin-bottom:1rem;
+    }
+    .result-header{
+      margin-bottom:1rem; padding-bottom:.75rem;
+      border-bottom:1px solid var(--border);
+    }
+    .result-title-row{
+      display:flex; justify-content:space-between; align-items:center;
+      margin-bottom:.5rem;
+    }
+    .result-title-row h3{font-size:1rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em;}
+    .result-stats{display:flex; gap:1.5rem; flex-wrap:wrap;}
+    .stat{font-size:.8rem; color:var(--mid);}
+    .stat strong{color:var(--dark); font-size:.95rem;}
+    .stat-green strong{color:var(--green);}
+
+    /* Board visual */
+    .board-item{
+      background:#fafafa; padding:1rem; border-radius:3px;
+      border-left:4px solid var(--dark); margin-bottom:.75rem;
+    }
+    .board-head{
+      display:flex; justify-content:space-between; align-items:center;
+      margin-bottom:.5rem;
+    }
+    .board-head strong{font-size:.85rem;}
+    .board-len-badge{
+      background:var(--dark); color:#fff; padding:.15rem .5rem;
+      border-radius:3px; font-size:.75rem; font-weight:600;
+    }
+    .board-bar-wrap{
+      background:#fff; padding:.4rem; border-radius:3px; margin-bottom:.5rem;
+    }
+    .board-bar{
+      display:flex; height:40px; border:2px solid var(--border);
+      border-radius:3px; overflow:hidden;
+    }
+    .cut-seg{
+      background:var(--dark); border-right:2px solid #fff;
+      display:flex; align-items:center; justify-content:center;
+      color:#fff; font-weight:600; font-size:.75rem;
+    }
+    .cut-seg:last-of-type{border-right:none;}
+    .rem-seg{
+      background:repeating-linear-gradient(
+        45deg, #eee, #eee 8px, #e2e2e2 8px, #e2e2e2 16px
+      );
+      display:flex; align-items:center; justify-content:center;
+      color:var(--mid); font-weight:600; font-size:.75rem;
+    }
+    .cuts-list{
+      display:flex; align-items:center; gap:.4rem;
+      flex-wrap:wrap; margin-bottom:.3rem; font-size:.8rem;
+    }
+    .cuts-list .lbl{color:var(--muted); font-weight:600; text-transform:uppercase; font-size:.7rem; letter-spacing:.08em;}
+    .cut-badge{
+      background:#fff; border:1px solid var(--border);
+      padding:.15rem .4rem; border-radius:3px; font-size:.8rem; font-weight:500;
+    }
+    .plus{color:var(--border);}
+    .remaining-val{font-size:.8rem; color:var(--mid);}
+    .remaining-val span{
+      background:#eee; padding:.15rem .5rem; border-radius:3px; font-weight:500;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Board Cut Optimizer</h1>
+    <div class="tagline">Minimize waste when cutting boards to length</div>
+  </header>
+
+  <div class="card" id="inputCard">
+    <!-- Boards -->
+    <div class="section-header">
+      <div class="field-label" style="margin:0">Available Boards (inches)</div>
+      <button class="btn btn-sm" onclick="addBoard()">+ Board</button>
+    </div>
+    <div id="boardInputs"></div>
+
+    <!-- Cuts -->
+    <div class="section-header" style="margin-top:1.25rem;">
+      <div class="field-label" style="margin:0">Required Cuts (inches)</div>
+      <button class="btn btn-sm" onclick="addCut()">+ Cut</button>
+    </div>
+    <div id="cutInputs"></div>
+
+    <!-- Settings -->
+    <div class="settings-row">
+      <div class="input-col">
+        <div class="field-label">Kerf Width (in)</div>
+        <input type="number" id="kerfWidth" value="0.125" step="0.001" min="0">
+      </div>
+      <div class="input-col">
+        <div class="field-label">Min Remnant (in)</div>
+        <input type="number" id="minRemnant" value="0" step="0.125" min="0">
+      </div>
+    </div>
+
+    <!-- Algorithm -->
+    <div class="algo-group">
+      <div class="field-label">Algorithm</div>
+      <div class="radio-row">
+        <label class="radio-label"><input type="radio" name="algo" value="auto" checked>Auto</label>
+        <label class="radio-label"><input type="radio" name="algo" value="exhaustive">Exhaustive</label>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions">
+      <button class="btn btn-primary" id="optimizeBtn" onclick="optimize()">Optimize Cuts</button>
+      <button class="btn" onclick="loadExample()">Load Example</button>
+    </div>
+  </div>
+
+  <div id="error"></div>
+  <div id="results"></div>
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────
+  let boards = [
+    {length:96, count:2, price:0, priority:5},
+    {length:87, count:2, price:0, priority:5},
+  ];
+  let cuts = [
+    {length:27.5, count:1},
+    {length:25, count:1},
+    {length:39.75, count:1},
+  ];
+
+  // ── Render inputs ──────────────────────────────────────────────────────
+  function renderBoards(){
+    const el=document.getElementById('boardInputs'); el.innerHTML='';
+    boards.forEach((b,i)=>{
+      el.innerHTML+=`
+        <div class="item-row">
+          <div class="input-col"><div class="field-label">Length</div>
+            <input type="number" step="0.125" value="${b.length}" onchange="boards[${i}].length=+this.value"></div>
+          <div class="times">×</div>
+          <div class="input-col narrow"><div class="field-label">Qty</div>
+            <input type="number" min="1" value="${b.count}" onchange="boards[${i}].count=+this.value"></div>
+          <div class="times">@</div>
+          <div class="input-col narrow"><div class="field-label">$/ea</div>
+            <input type="number" step="0.01" min="0" value="${b.price}" onchange="boards[${i}].price=+this.value"></div>
+          <div class="times">★</div>
+          <div class="input-col narrow"><div class="field-label">Priority</div>
+            <input type="number" min="1" max="10" value="${b.priority}" onchange="boards[${i}].priority=+this.value"></div>
+          ${boards.length>1?`<button class="btn btn-remove btn-sm" onclick="boards.splice(${i},1);renderBoards()">×</button>`:''}
+        </div>`;
+    });
+  }
+  function renderCuts(){
+    const el=document.getElementById('cutInputs'); el.innerHTML='';
+    cuts.forEach((c,i)=>{
+      el.innerHTML+=`
+        <div class="item-row">
+          <div class="input-col"><div class="field-label">Length</div>
+            <input type="number" step="0.125" value="${c.length}" onchange="cuts[${i}].length=+this.value"></div>
+          <div class="times">×</div>
+          <div class="input-col narrow"><div class="field-label">Qty</div>
+            <input type="number" min="1" value="${c.count}" onchange="cuts[${i}].count=+this.value"></div>
+          ${cuts.length>1?`<button class="btn btn-remove btn-sm" onclick="cuts.splice(${i},1);renderCuts()">×</button>`:''}
+        </div>`;
+    });
+  }
+  function addBoard(){boards.push({length:96,count:1,price:0,priority:5});renderBoards();}
+  function addCut(){cuts.push({length:12,count:1});renderCuts();}
+  function loadExample(){
+    boards=[{length:96,count:2,price:12.50,priority:5},{length:87,count:2,price:10.00,priority:7}];
+    cuts=[{length:27.5,count:1},{length:25,count:1},{length:39.75,count:1},{length:42,count:1},{length:18.5,count:1},{length:33,count:1}];
+    document.getElementById('minRemnant').value=12;
+    document.getElementById('kerfWidth').value=0.125;
+    renderBoards(); renderCuts();
+  }
+  renderBoards(); renderCuts();
+
+  // ── Optimizer (exhaustive backtracking, ported from Python) ────────────
+  function findValidCombinations(cutsList, maxLength){
+    const combos=[[]];
+    const n=cutsList.length;
+    for(let mask=1;mask<(1<<n);mask++){
+      const combo=[];
+      let sum=0;
+      for(let j=0;j<n;j++){
+        if(mask&(1<<j)){combo.push(cutsList[j]); sum+=cutsList[j];}
+      }
+      if(sum<=maxLength) combos.push(combo);
+    }
+    return combos;
+  }
+
+  function solutionKey(sol){
+    return sol.boards.map(b=>b.cuts.slice().sort((a,c)=>a-c).join(',')).sort().join('|');
+  }
+
+  function optimizeExhaustive(availBoards, reqCuts){
+    const solutions=[];
+    const seen=new Set();
+    let count=0;
+    const MAX=200;
+
+    function backtrack(bi, remCuts, assignment){
+      if(count>=MAX) return;
+      if(remCuts.length===0){
+        const sol=buildSolution(availBoards, assignment);
+        if(sol){
+          const key=solutionKey(sol);
+          if(!seen.has(key)){seen.add(key); solutions.push(sol); count++;}
+        }
+        return;
+      }
+      if(bi>=availBoards.length) return;
+
+      const combos=findValidCombinations(remCuts, availBoards[bi]);
+      for(const combo of combos){
+        if(count>=MAX) return;
+        const newAssign=assignment.map(a=>a.slice());
+        newAssign[bi]=combo;
+        const newRem=remCuts.slice();
+        for(const c of combo){const idx=newRem.indexOf(c); if(idx>=0) newRem.splice(idx,1);}
+        backtrack(bi+1, newRem, newAssign);
+      }
+      // skip this board
+      backtrack(bi+1, remCuts, assignment);
+    }
+
+    backtrack(0, reqCuts, availBoards.map(()=>[]));
+
+    solutions.sort((a,b)=>{
+      if(b.whole_boards_kept!==a.whole_boards_kept) return b.whole_boards_kept-a.whole_boards_kept;
+      if(b.max_remaining!==a.max_remaining) return b.max_remaining-a.max_remaining;
+      return a.total_waste-b.total_waste;
+    });
+    return solutions.slice(0,50);
+  }
+
+  function buildSolution(availBoards, assignment){
+    const boardDetails=[];
+    const remainingLengths=[];
+    let used=0;
+    for(let i=0;i<availBoards.length;i++){
+      const c=assignment[i];
+      if(c.length>0){
+        used++;
+        const total=c.reduce((s,v)=>s+v,0);
+        const rem=Math.round((availBoards[i]-total)*1000)/1000;
+        remainingLengths.push(rem);
+        boardDetails.push({board_index:i, original_length:availBoards[i], cuts:c.slice().sort((a,b)=>b-a), remaining:Math.round(rem*100)/100});
+      }
+    }
+    if(boardDetails.length===0) return null;
+    return {
+      boards:boardDetails,
+      whole_boards_kept:availBoards.length-used,
+      max_remaining:Math.round(Math.max(...remainingLengths)*100)/100,
+      total_waste:Math.round(remainingLengths.reduce((s,v)=>s+v,0)*100)/100,
+    };
+  }
+
+  // ── Run ────────────────────────────────────────────────────────────────
+  function optimize(){
+    const errEl=document.getElementById('error');
+    const resEl=document.getElementById('results');
+    errEl.innerHTML=''; resEl.innerHTML='';
+
+    const kerf=+(document.getElementById('kerfWidth').value)||0;
+    const minRem=+(document.getElementById('minRemnant').value)||0;
+
+    // Expand boards
+    const expandedBoards=[];
+    const boardMeta=[];
+    for(const b of boards){
+      if(b.length>0&&b.count>0){
+        for(let i=0;i<b.count;i++){expandedBoards.push(b.length); boardMeta.push({price:b.price||0, priority:b.priority||5});}
+      }
+    }
+    // Expand cuts (with kerf)
+    const expandedCuts=[];
+    for(const c of cuts){
+      if(c.length>0&&c.count>0){
+        for(let i=0;i<c.count;i++) expandedCuts.push(c.length+kerf);
+      }
+    }
+
+    if(expandedBoards.length===0){errEl.innerHTML='<div class="error">Add at least one board.</div>'; return;}
+    if(expandedCuts.length===0){errEl.innerHTML='<div class="error">Add at least one cut.</div>'; return;}
+
+    const totalNeeded=expandedCuts.reduce((s,v)=>s+v,0);
+    const totalAvail=expandedBoards.reduce((s,v)=>s+v,0);
+    if(totalNeeded>totalAvail){
+      errEl.innerHTML=`<div class="error">Total cuts needed (${totalNeeded.toFixed(2)}") including kerf exceeds available board length (${totalAvail}").</div>`;
+      return;
+    }
+
+    if(expandedBoards.length>20||expandedCuts.length>20){
+      errEl.innerHTML='<div class="error">Problem too large for client-side exhaustive search (max 20 boards × 20 cuts). Reduce inputs.</div>';
+      return;
+    }
+
+    document.getElementById('optimizeBtn').disabled=true;
+    document.getElementById('optimizeBtn').textContent='Optimizing…';
+
+    setTimeout(()=>{
+      try{
+        let results=optimizeExhaustive(expandedBoards, expandedCuts);
+        if(results.length===0){
+          errEl.innerHTML='<div class="error">No valid cutting combinations found.</div>';
+          return;
+        }
+
+        // Post-process: add cost, usable remnants, priority
+        for(const r of results){
+          let totalCost=0, usable=0, prioScore=0;
+          for(const b of r.boards){
+            const m=boardMeta[b.board_index];
+            if(m){totalCost+=m.price; prioScore+=m.priority;}
+            if(b.remaining>=minRem) usable++;
+          }
+          r.total_cost=Math.round(totalCost*100)/100;
+          r.usable_remnants=usable;
+          r.priority_score=prioScore;
+        }
+        results.sort((a,b)=>{
+          if(b.priority_score!==a.priority_score) return b.priority_score-a.priority_score;
+          if(a.total_cost!==b.total_cost) return a.total_cost-b.total_cost;
+          if(b.whole_boards_kept!==a.whole_boards_kept) return b.whole_boards_kept-a.whole_boards_kept;
+          return b.max_remaining-a.max_remaining;
+        });
+
+        renderResults(results);
+      }catch(e){
+        errEl.innerHTML=`<div class="error">Error: ${e.message}</div>`;
+      }finally{
+        document.getElementById('optimizeBtn').disabled=false;
+        document.getElementById('optimizeBtn').textContent='Optimize Cuts';
+      }
+    },50);
+  }
+
+  // ── Render results ─────────────────────────────────────────────────────
+  function renderResults(results){
+    const el=document.getElementById('results');
+    const maxLen=Math.max(...results[0].boards.map(b=>b.original_length));
+    let html=`<h2>Results</h2>
+      <div class="results-info">Found <strong>${results.length}</strong> cutting pattern${results.length!==1?'s':''}.</div>`;
+
+    results.forEach((r,idx)=>{
+      const statsHtml=[
+        r.total_cost>0?`<span class="stat stat-green"><strong>$${r.total_cost.toFixed(2)}</strong> cost</span>`:'',
+        `<span class="stat"><strong>${r.whole_boards_kept}</strong> preserved</span>`,
+        `<span class="stat"><strong>${r.max_remaining}"</strong> longest rem.</span>`,
+        `<span class="stat"><strong>${r.total_waste}"</strong> total waste</span>`,
+        `<span class="stat stat-green"><strong>${r.usable_remnants}</strong> usable</span>`,
+      ].filter(Boolean).join('');
+
+      let boardsHtml='';
+      for(const b of r.boards){
+        const cutSegs=b.cuts.map(c=>{
+          const pct=(c/b.original_length*100).toFixed(1);
+          return `<div class="cut-seg" style="width:${pct}%" title="${c}&quot;">${c}"</div>`;
+        }).join('');
+        const remPct=(b.remaining/b.original_length*100).toFixed(1);
+        const remSeg=b.remaining>0?`<div class="rem-seg" style="width:${remPct}%" title="Remaining: ${b.remaining}&quot;">${b.remaining}"</div>`:'';
+        const barWidth=(b.original_length/maxLen*100).toFixed(1);
+
+        const cutBadges=b.cuts.map((c,ci)=>`<span class="cut-badge">${c}"</span>${ci<b.cuts.length-1?'<span class="plus">+</span>':''}`).join('');
+
+        boardsHtml+=`
+          <div class="board-item">
+            <div class="board-head">
+              <strong>Board #${b.board_index+1}</strong>
+              <span class="board-len-badge">${b.original_length}"</span>
+            </div>
+            <div class="board-bar-wrap">
+              <div class="board-bar" style="width:${barWidth}%">${cutSegs}${remSeg}</div>
+            </div>
+            <div class="cuts-list"><span class="lbl">Cuts:</span> ${cutBadges}</div>
+            <div class="remaining-val"><span class="lbl" style="color:var(--muted);font-weight:600;text-transform:uppercase;font-size:.7rem;letter-spacing:.08em">Remaining:</span> <span>${b.remaining}"</span></div>
+          </div>`;
+      }
+
+      html+=`
+        <div class="result-card">
+          <div class="result-header">
+            <div class="result-title-row"><h3>Option ${idx+1}</h3></div>
+            <div class="result-stats">${statsHtml}</div>
+          </div>
+          ${boardsHtml}
+        </div>`;
+    });
+
+    el.innerHTML=html;
+  }
+</script>
+<script src="/footer.js"></script>
+</body>
+</html>
