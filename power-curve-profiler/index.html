@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power Curve Profiler — Andy's Toolbox</title>
+    <style>
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        :root{
+          --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+          --mid:#666; --muted:#999; --border:#ddd; --accent:#e74c3c;
+        }
+        body {
+            font-family: system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--dark);
+            overflow: hidden;
+        }
+        body::before {
+            content: ''; position: fixed; inset: 0; z-index: 0;
+            background-image: repeating-linear-gradient(
+                45deg, transparent, transparent 20px,
+                rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+            );
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        canvas { display: block; }
+
+        #header {
+            position: absolute;
+            top: 30px;
+            left: 40px;
+            z-index: 10;
+            pointer-events: none;
+        }
+        #header h1 {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: #fff;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+        #header p {
+            font-size: 13px;
+            color: #aaa;
+            max-width: 460px;
+            line-height: 1.55;
+        }
+        #header .ride-meta {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        #legend {
+            position: absolute;
+            bottom: 30px;
+            left: 40px;
+            z-index: 10;
+            pointer-events: none;
+            display: none;
+        }
+        #legend .gradient-bar {
+            width: 200px;
+            height: 12px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+        }
+        #legend .labels {
+            display: flex;
+            justify-content: space-between;
+            width: 200px;
+            font-size: 11px;
+            color: #aaa;
+        }
+        #legend .title {
+            font-size: 12px;
+            color: #bbb;
+            margin-bottom: 6px;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            z-index: 10;
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            align-items: flex-end;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .control-group label {
+            font-size: 12px;
+            color: #aaa;
+            white-space: nowrap;
+        }
+        .control-group input[type="range"] {
+            width: 120px;
+            accent-color: var(--accent);
+        }
+        .control-group button {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #ccc;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .control-group button:hover {
+            background: rgba(255,255,255,0.18);
+        }
+
+        #tooltip {
+            position: absolute;
+            pointer-events: none;
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid var(--dark);
+            border-radius: 4px;
+            padding: 10px 14px;
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--dark);
+            display: none;
+            z-index: 20;
+            backdrop-filter: blur(8px);
+        }
+        #tooltip .value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        #tooltip .label {
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+
+        .explanation {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            z-index: 10;
+            max-width: 280px;
+            pointer-events: none;
+            display: none;
+        }
+        .explanation .detail {
+            font-size: 11px;
+            color: #888;
+            line-height: 1.6;
+            border-left: 2px solid #555;
+            padding-left: 10px;
+        }
+        .explanation .detail strong {
+            color: #bbb;
+        }
+
+        /* ─── Upload landing ──────────────────────────────────── */
+        #upload-screen {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            background: var(--bg);
+        }
+        #upload-screen h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+            text-transform: uppercase;
+        }
+        #upload-screen .subtitle {
+            font-size: 14px;
+            color: var(--mid);
+            max-width: 480px;
+            text-align: center;
+            line-height: 1.6;
+            margin-bottom: 40px;
+        }
+
+        #drop-zone {
+            width: 420px;
+            height: 220px;
+            border: 2px dashed var(--border);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            background: var(--surface);
+        }
+        #drop-zone:hover, #drop-zone.dragover {
+            border-color: var(--accent);
+            background: #fff5f3;
+        }
+        #drop-zone .icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+        #drop-zone .text {
+            font-size: 15px;
+            color: var(--mid);
+            margin-bottom: 6px;
+        }
+        #drop-zone .subtext {
+            font-size: 12px;
+            color: var(--muted);
+        }
+        #drop-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .upload-options {
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .upload-options label {
+            font-size: .75rem;
+            font-weight: 600;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+        .upload-options select {
+            font-size: 1rem;
+            padding: .4rem .6rem;
+            border: 2px solid var(--border);
+            border-radius: 3px;
+            background: #fafafa;
+            color: var(--dark);
+        }
+        .upload-options select:focus {
+            outline: none;
+            border-color: var(--dark);
+        }
+
+        #processing {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+        #processing .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #processing .status {
+            font-size: 14px;
+            color: var(--mid);
+        }
+
+        #error-msg {
+            display: none;
+            margin-top: 20px;
+            padding: 12px 20px;
+            background: #fff5f5;
+            border: 2px solid var(--accent);
+            border-radius: 4px;
+            color: var(--accent);
+            font-size: 13px;
+            max-width: 420px;
+            text-align: center;
+        }
+
+        /* Upload another button (shown after visualization) */
+        #upload-another {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <!-- Upload screen -->
+    <div id="upload-screen">
+        <h1>Power × Duration × Repeatability</h1>
+        <p class="subtitle">
+            Upload a GPX file with power data to generate a 3D power curve.
+            The surface shows how your best power decays across duration and repeated on/off efforts.
+            All processing happens locally in your browser via WebAssembly.
+        </p>
+        <div id="drop-zone">
+            <div class="icon">⬆</div>
+            <div class="text">Drop a .gpx file here or click to browse</div>
+            <div class="subtext">Must contain power meter data</div>
+            <input type="file" id="file-input" accept=".gpx">
+        </div>
+        <div class="upload-options">
+            <label>Rest between efforts:</label>
+            <select id="rest-mode-upload">
+                <option value="300" selected>5 min fixed</option>
+                <option value="0">Equal to effort</option>
+                <option value="60">1 min fixed</option>
+                <option value="120">2 min fixed</option>
+                <option value="180">3 min fixed</option>
+                <option value="600">10 min fixed</option>
+            </select>
+        </div>
+        <div id="processing">
+            <div class="spinner"></div>
+            <div class="status" id="status-text">Parsing GPX…</div>
+        </div>
+        <div id="error-msg" id="error-text"></div>
+    </div>
+
+    <!-- Visualization overlays (hidden until data loads) -->
+    <div id="header" style="display:none">
+        <h1>Power × Duration × Repeatability</h1>
+        <p>A 3D power curve built from your ride data. The surface shows the best average
+           power achievable across duration and repeated on/off efforts of equal length.</p>
+        <div class="ride-meta" id="ride-meta"></div>
+    </div>
+
+    <div class="explanation" id="explanation">
+        <div class="detail">
+            <strong>How to read this:</strong><br>
+            Front edge = standard power curve (1 effort).<br>
+            Depth = repeated efforts with equal rest.<br>
+            e.g. 3×30s = best avg of 30s on, 30s off, 30s on, 30s off, 30s on — found by scanning all possible windows in the ride.
+        </div>
+    </div>
+
+    <div id="legend">
+        <div class="title">Power (watts)</div>
+        <div class="gradient-bar" id="gradient-bar"></div>
+        <div class="labels">
+            <span id="legend-low">0W</span>
+            <span id="legend-high">500W</span>
+        </div>
+    </div>
+
+    <div id="controls">
+        <div class="control-group">
+            <label>Surface opacity</label>
+            <input type="range" id="opacity-slider" min="0.2" max="1" step="0.05" value="0.85">
+        </div>
+        <div class="control-group">
+            <label>Wireframe</label>
+            <input type="range" id="wireframe-slider" min="0" max="0.6" step="0.05" value="0.2">
+        </div>
+        <div class="control-group">
+            <label>Rest between efforts</label>
+            <select id="rest-mode-viz" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #ccc; padding: 6px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                <option value="300" selected>5 min fixed</option>
+                <option value="0">Equal to effort</option>
+                <option value="60">1 min fixed</option>
+                <option value="120">2 min fixed</option>
+                <option value="180">3 min fixed</option>
+                <option value="600">10 min fixed</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <button id="reset-camera">Reset View</button>
+            <button id="toggle-animation">Auto-Rotate: On</button>
+            <button id="upload-another">New File</button>
+        </div>
+    </div>
+
+    <div id="tooltip"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script type="module">
+    import init, { process_gpx } from './pkg/power_scanner.js';
+
+    // ─── WASM init ───────────────────────────────────────────────────────
+    let wasmReady = false;
+    init().then(() => { wasmReady = true; });
+
+    // ─── File upload ─────────────────────────────────────────────────────
+    const uploadScreen = document.getElementById('upload-screen');
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const processing = document.getElementById('processing');
+    const statusText = document.getElementById('status-text');
+    const errorMsg = document.getElementById('error-msg');
+    const restModeUpload = document.getElementById('rest-mode-upload');
+    const restModeViz = document.getElementById('rest-mode-viz');
+
+    let cachedGpxText = null; // stored so we can re-scan with different rest
+
+    function getRestSecs() {
+        // Use whichever selector is currently visible
+        const vizVisible = document.getElementById('controls').style.display === 'flex';
+        return parseInt(vizVisible ? restModeViz.value : restModeUpload.value, 10);
+    }
+
+    function showError(msg) {
+        errorMsg.textContent = msg;
+        errorMsg.style.display = 'block';
+        processing.style.display = 'none';
+        dropZone.style.display = 'flex';
+    }
+
+    async function runScan(gpxText, restSecs) {
+        // Wait for WASM if still loading
+        if (!wasmReady) {
+            statusText.textContent = 'Loading WASM engine…';
+            await new Promise(resolve => {
+                const check = setInterval(() => {
+                    if (wasmReady) { clearInterval(check); resolve(); }
+                }, 50);
+            });
+        }
+
+        // Yield to let UI update
+        await new Promise(r => requestAnimationFrame(r));
+        await new Promise(r => setTimeout(r, 50));
+
+        const t0 = performance.now();
+        const jsonStr = process_gpx(gpxText, restSecs);
+        const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+        const data = JSON.parse(jsonStr);
+
+        if (data.error) throw new Error(data.error);
+
+        return { data, elapsed };
+    }
+
+    function handleFile(file) {
+        if (!file) return;
+        if (!file.name.toLowerCase().endsWith('.gpx')) {
+            showError('Please upload a .gpx file.');
+            return;
+        }
+
+        errorMsg.style.display = 'none';
+        dropZone.style.display = 'none';
+        processing.style.display = 'flex';
+        statusText.textContent = 'Reading file…';
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            cachedGpxText = e.target.result;
+            const restSecs = getRestSecs();
+
+            statusText.textContent = 'Scanning power data…';
+
+            try {
+                const { data, elapsed } = await runScan(cachedGpxText, restSecs);
+
+                statusText.textContent = `Done in ${elapsed}s. Rendering…`;
+                await new Promise(r => setTimeout(r, 100));
+
+                // Sync the viz selector to match upload selector
+                restModeViz.value = restModeUpload.value;
+
+                // Transition to visualization
+                uploadScreen.style.display = 'none';
+                document.getElementById('header').style.display = 'block';
+                document.getElementById('explanation').style.display = 'block';
+                document.getElementById('legend').style.display = 'block';
+                document.getElementById('controls').style.display = 'flex';
+                document.getElementById('upload-another').style.display = 'inline-block';
+
+                buildSurface(data);
+            } catch (err) {
+                showError('Error processing file: ' + err.message);
+            }
+        };
+        reader.onerror = () => showError('Failed to read file.');
+        reader.readAsText(file);
+    }
+
+    // Re-scan when rest mode changes in viz controls
+    restModeViz.addEventListener('change', async () => {
+        if (!cachedGpxText) return;
+        const restSecs = parseInt(restModeViz.value, 10);
+        try {
+            const { data } = await runScan(cachedGpxText, restSecs);
+            buildSurface(data);
+        } catch (err) {
+            console.error('Re-scan error:', err);
+        }
+    });
+
+    fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+    // Drag and drop
+    dropZone.addEventListener('dragover', e => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        handleFile(e.dataTransfer.files[0]);
+    });
+
+    // Upload another
+    document.getElementById('upload-another').addEventListener('click', () => {
+        uploadScreen.style.display = 'flex';
+        dropZone.style.display = 'flex';
+        processing.style.display = 'none';
+        errorMsg.style.display = 'none';
+        document.getElementById('header').style.display = 'none';
+        document.getElementById('explanation').style.display = 'none';
+        document.getElementById('legend').style.display = 'none';
+        document.getElementById('controls').style.display = 'none';
+        fileInput.value = '';
+    });
+
+    // ─── Scene setup ─────────────────────────────────────────────────────
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x0a0a1a, 1);
+    container.appendChild(renderer.domElement);
+
+    const controls3d = new THREE.OrbitControls(camera, renderer.domElement);
+    controls3d.enableDamping = true;
+    controls3d.dampingFactor = 0.08;
+    controls3d.minDistance = 3;
+    controls3d.maxDistance = 25;
+    controls3d.autoRotate = true;
+    controls3d.autoRotateSpeed = 0.4;
+
+    const DEFAULT_CAMERA = new THREE.Vector3(9, 5.5, 9);
+    camera.position.copy(DEFAULT_CAMERA);
+    camera.lookAt(0, 0, 0);
+
+    // Lighting
+    scene.add(new THREE.AmbientLight(0x404060, 0.6));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
+    const dirLight2 = new THREE.DirectionalLight(0x8888ff, 0.3);
+    dirLight2.position.set(-5, 5, -5);
+    scene.add(dirLight2);
+
+    // ─── Color ───────────────────────────────────────────────────────────
+    function powerToColor(power, minP, maxP) {
+        const t = Math.max(0, Math.min(1, (power - minP) / (maxP - minP)));
+        let r, g, b;
+        if (t < 0.25) {
+            const s = t / 0.25;
+            r = 0.08 + s * 0.05;
+            g = 0.1 + s * 0.2;
+            b = 0.35 + s * 0.15;
+        } else if (t < 0.5) {
+            const s = (t - 0.25) / 0.25;
+            r = 0.13 + s * 0.35;
+            g = 0.3 + s * 0.15;
+            b = 0.5 - s * 0.2;
+        } else if (t < 0.75) {
+            const s = (t - 0.5) / 0.25;
+            r = 0.48 + s * 0.42;
+            g = 0.45 - s * 0.1;
+            b = 0.3 - s * 0.2;
+        } else {
+            const s = (t - 0.75) / 0.25;
+            r = 0.9 + s * 0.1;
+            g = 0.35 + s * 0.5;
+            b = 0.1 + s * 0.4;
+        }
+        return new THREE.Color(r, g, b);
+    }
+
+    function buildLegendGradient(minP, maxP) {
+        const stops = [];
+        for (let i = 0; i <= 20; i++) {
+            const t = i / 20;
+            const p = minP + t * (maxP - minP);
+            const c = powerToColor(p, minP, maxP);
+            stops.push(`rgb(${Math.round(c.r*255)},${Math.round(c.g*255)},${Math.round(c.b*255)}) ${t*100}%`);
+        }
+        document.getElementById('gradient-bar').style.background = `linear-gradient(to right, ${stops.join(', ')})`;
+        document.getElementById('legend-low').textContent = Math.round(minP) + 'W';
+        document.getElementById('legend-high').textContent = Math.round(maxP) + 'W';
+    }
+
+    // ─── Build surface from data ─────────────────────────────────────────
+    const SCALE_X = 8;
+    const SCALE_Y = 4;
+    const SCALE_Z = 5;
+
+    let surfaceMesh, wireframeMesh, gridGroup, labelSprites = [];
+    let dataGrid, durationLabels, durationsSec, maxRepeats;
+
+    function buildSurface(raw) {
+        dataGrid = raw.data;
+        durationLabels = raw.duration_labels;
+        durationsSec = raw.durations_sec;
+        maxRepeats = raw.max_repeats;
+
+        const cols = durationLabels.length;
+        const rows = maxRepeats;
+
+        document.getElementById('ride-meta').textContent =
+            `${Math.round(raw.total_seconds / 60)} minutes of ride data · ${cols} durations · up to ${rows} repeats`;
+
+        // Remove old objects
+        if (surfaceMesh) scene.remove(surfaceMesh);
+        if (wireframeMesh) scene.remove(wireframeMesh);
+        if (gridGroup) scene.remove(gridGroup);
+        labelSprites.forEach(s => scene.remove(s));
+        labelSprites = [];
+
+        let minP = Infinity, maxP = -Infinity;
+        const maxRepeatPerDur = new Array(cols).fill(0);
+        for (let r = 0; r < rows; r++) {
+            for (let d = 0; d < cols; d++) {
+                const v = dataGrid[r] && dataGrid[r][d];
+                if (v != null) {
+                    if (v < minP) minP = v;
+                    if (v > maxP) maxP = v;
+                    maxRepeatPerDur[d] = r + 1;
+                }
+            }
+        }
+
+        const logDurs = durationsSec.map(d => Math.log10(d));
+        const logMin = logDurs[0];
+        const logMax = logDurs[logDurs.length - 1];
+        const xPositions = logDurs.map(ld => ((ld - logMin) / (logMax - logMin)) * SCALE_X - SCALE_X / 2);
+
+        buildLegendGradient(minP, maxP);
+
+        const SUBDIV_D = 4;
+        const SUBDIV_R = 3;
+        const hiResCols = (cols - 1) * SUBDIV_D + 1;
+
+        let effectiveRows = rows;
+        for (let r = rows - 1; r >= 0; r--) {
+            let hasData = false;
+            for (let d = 0; d < cols; d++) {
+                if (dataGrid[r] && dataGrid[r][d] != null) { hasData = true; break; }
+            }
+            if (hasData) { effectiveRows = r + 1; break; }
+        }
+        const hiResRows = (effectiveRows - 1) * SUBDIV_R + 1;
+
+        function getInterpolatedPower(dFrac, rFrac) {
+            const d0 = Math.floor(dFrac);
+            const d1 = Math.min(d0 + 1, cols - 1);
+            const dt = dFrac - d0;
+            const r0 = Math.floor(rFrac);
+            const r1 = Math.min(r0 + 1, effectiveRows - 1);
+            const rt = rFrac - r0;
+
+            const get = (r, d) => {
+                if (r < rows && d < cols && dataGrid[r] && dataGrid[r][d] != null) return dataGrid[r][d];
+                return null;
+            };
+
+            const v00 = get(r0, d0);
+            const v01 = get(r0, d1);
+            const v10 = get(r1, d0);
+            const v11 = get(r1, d1);
+
+            const vals = [v00, v01, v10, v11].filter(v => v != null);
+            if (vals.length === 0) return null;
+            if (vals.length < 4) {
+                if (v00 != null && v01 != null) return v00 * (1 - dt) + v01 * dt;
+                if (v00 != null) return v00;
+                return vals[0];
+            }
+
+            const top = v00 * (1 - dt) + v01 * dt;
+            const bot = v10 * (1 - dt) + v11 * dt;
+            return top * (1 - rt) + bot * rt;
+        }
+
+        const vertices = [];
+        const colors = [];
+        const indices = [];
+        const hiResData = [];
+
+        for (let ri = 0; ri < hiResRows; ri++) {
+            hiResData[ri] = [];
+            for (let di = 0; di < hiResCols; di++) {
+                const dFrac = di / SUBDIV_D;
+                const rFrac = ri / SUBDIV_R;
+
+                const power = getInterpolatedPower(dFrac, rFrac);
+                hiResData[ri][di] = power;
+
+                const d0 = Math.floor(dFrac);
+                const d1 = Math.min(d0 + 1, cols - 1);
+                const dt = dFrac - d0;
+                const x = xPositions[d0] * (1 - dt) + xPositions[d1] * dt;
+                const z = (rFrac / (effectiveRows - 1)) * SCALE_Z - SCALE_Z / 2;
+                const y = power != null ? ((power - minP) / (maxP - minP)) * SCALE_Y : 0;
+
+                vertices.push(x, y, z);
+                const c = power != null ? powerToColor(power, minP, maxP) : new THREE.Color(0.1, 0.1, 0.15);
+                colors.push(c.r, c.g, c.b);
+            }
+        }
+
+        for (let ri = 0; ri < hiResRows - 1; ri++) {
+            for (let di = 0; di < hiResCols - 1; di++) {
+                const a = ri * hiResCols + di;
+                const b = a + 1;
+                const c = a + hiResCols;
+                const d = c + 1;
+                const p_a = hiResData[ri][di];
+                const p_b = hiResData[ri][di + 1];
+                const p_c = hiResData[ri + 1] ? hiResData[ri + 1][di] : null;
+                const p_d = hiResData[ri + 1] ? hiResData[ri + 1][di + 1] : null;
+                if (p_a != null && p_b != null && p_c != null && p_d != null) {
+                    indices.push(a, b, d);
+                    indices.push(a, d, c);
+                }
+            }
+        }
+
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geometry.setIndex(indices);
+        geometry.computeVertexNormals();
+
+        const material = new THREE.MeshPhongMaterial({
+            vertexColors: true,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: parseFloat(document.getElementById('opacity-slider').value),
+            shininess: 30,
+            specular: 0x111122,
+        });
+        surfaceMesh = new THREE.Mesh(geometry, material);
+        scene.add(surfaceMesh);
+
+        const wireMat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            wireframe: true,
+            transparent: true,
+            opacity: parseFloat(document.getElementById('wireframe-slider').value),
+        });
+        wireframeMesh = new THREE.Mesh(geometry.clone(), wireMat);
+        scene.add(wireframeMesh);
+
+        // ─── Grid lines, axes, drop-lines ─────────────────────────────────
+        gridGroup = new THREE.Group();
+        const floorMat = new THREE.LineBasicMaterial({ color: 0x222244, transparent: true, opacity: 0.15 });
+
+        for (let d = 0; d < cols; d++) {
+            const x = xPositions[d];
+            gridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(x, 0, -SCALE_Z / 2),
+                new THREE.Vector3(x, 0, SCALE_Z / 2)
+            ]), floorMat));
+        }
+        for (let r = 0; r < effectiveRows; r++) {
+            const z = (r / (effectiveRows - 1)) * SCALE_Z - SCALE_Z / 2;
+            gridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(-SCALE_X / 2, 0, z),
+                new THREE.Vector3(SCALE_X / 2, 0, z)
+            ]), floorMat));
+        }
+
+        const axMat = new THREE.LineBasicMaterial({ color: 0x555577 });
+        gridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(-SCALE_X/2, 0, SCALE_Z/2 + 0.15),
+            new THREE.Vector3(SCALE_X/2, 0, SCALE_Z/2 + 0.15)
+        ]), axMat));
+        gridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(-SCALE_X/2 - 0.15, 0, -SCALE_Z/2),
+            new THREE.Vector3(-SCALE_X/2 - 0.15, 0, SCALE_Z/2)
+        ]), axMat));
+        gridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(-SCALE_X/2 - 0.15, 0, SCALE_Z/2 + 0.15),
+            new THREE.Vector3(-SCALE_X/2 - 0.15, SCALE_Y, SCALE_Z/2 + 0.15)
+        ]), axMat));
+
+        const dropMat = new THREE.LineBasicMaterial({ color: 0x333355, transparent: true, opacity: 0.35 });
+        for (let d = 0; d < cols; d++) {
+            const x = xPositions[d];
+            const power = dataGrid[0][d];
+            if (power == null) continue;
+            const y = ((power - minP) / (maxP - minP)) * SCALE_Y;
+            gridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(x, 0, -SCALE_Z / 2),
+                new THREE.Vector3(x, y, -SCALE_Z / 2)
+            ]), dropMat));
+        }
+        for (let r = 0; r < effectiveRows; r++) {
+            const power = dataGrid[r] && dataGrid[r][0];
+            if (power == null) continue;
+            const x = xPositions[0];
+            const z = (r / (effectiveRows - 1)) * SCALE_Z - SCALE_Z / 2;
+            const y = ((power - minP) / (maxP - minP)) * SCALE_Y;
+            gridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(x, 0, z),
+                new THREE.Vector3(x, y, z)
+            ]), dropMat));
+        }
+
+        const frontEdgePts = [];
+        for (let d = 0; d < cols; d++) {
+            const power = dataGrid[0][d];
+            if (power == null) continue;
+            const x = xPositions[d];
+            const y = ((power - minP) / (maxP - minP)) * SCALE_Y;
+            frontEdgePts.push(new THREE.Vector3(x, y, -SCALE_Z / 2));
+        }
+        if (frontEdgePts.length > 1) {
+            const frontMat = new THREE.LineBasicMaterial({ color: 0xff8855, transparent: true, opacity: 0.7 });
+            gridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(frontEdgePts), frontMat));
+        }
+
+        scene.add(gridGroup);
+
+        // ─── Labels ──────────────────────────────────────────────────────
+        function makeLabel(text, position, fontSize, color, align) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 256;
+            canvas.height = 64;
+            ctx.font = `${fontSize || 22}px system-ui, sans-serif`;
+            ctx.fillStyle = color || '#777799';
+            ctx.textAlign = align || 'center';
+            ctx.textBaseline = 'middle';
+            const xPos = align === 'right' ? 248 : align === 'left' ? 8 : 128;
+            ctx.fillText(text, xPos, 32);
+            const texture = new THREE.CanvasTexture(canvas);
+            const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+            const sprite = new THREE.Sprite(mat);
+            sprite.position.copy(position);
+            sprite.scale.set(1.8, 0.45, 1);
+            scene.add(sprite);
+            labelSprites.push(sprite);
+        }
+
+        const durTickIndices = [];
+        const targetLabels = ['1s','5s','10s','30s','1m','2m','5m','10m','20m','60m'];
+        for (let i = 0; i < durationLabels.length; i++) {
+            if (targetLabels.includes(durationLabels[i])) durTickIndices.push(i);
+        }
+        if (durTickIndices.length < 4) {
+            for (let i = 0; i < cols; i += Math.max(1, Math.floor(cols / 8))) durTickIndices.push(i);
+        }
+        for (const d of durTickIndices) {
+            makeLabel(durationLabels[d], new THREE.Vector3(xPositions[d], -0.25, SCALE_Z/2 + 0.5), 20, '#666688');
+        }
+
+        for (let r = 0; r < effectiveRows; r++) {
+            const z = (r / (effectiveRows - 1)) * SCALE_Z - SCALE_Z / 2;
+            const label = r === 0 ? '1×' : (r + 1) + '×';
+            makeLabel(label, new THREE.Vector3(-SCALE_X/2 - 0.6, -0.25, z), 18, '#666688');
+            makeLabel(label, new THREE.Vector3(SCALE_X/2 + 0.6, -0.25, z), 18, '#666688');
+        }
+
+        const powerTicks = 5;
+        for (let i = 0; i <= powerTicks; i++) {
+            const frac = i / powerTicks;
+            const watts = Math.round(minP + frac * (maxP - minP));
+            const y = frac * SCALE_Y;
+            makeLabel(watts + 'W', new THREE.Vector3(-SCALE_X/2 - 0.85, y, SCALE_Z/2 + 0.5), 17, '#666688');
+        }
+
+        makeLabel('DURATION →', new THREE.Vector3(0, -0.6, SCALE_Z/2 + 0.95), 18, '#555577');
+        makeLabel('← REPEATS', new THREE.Vector3(-SCALE_X/2 - 1.0, -0.6, 0), 18, '#555577');
+        makeLabel('REPEATS →', new THREE.Vector3(SCALE_X/2 + 1.0, -0.6, 0), 18, '#555577');
+        makeLabel('POWER ↑', new THREE.Vector3(-SCALE_X/2 - 1.2, SCALE_Y * 0.5, SCALE_Z/2 + 0.95), 18, '#555577');
+
+        surfaceMesh.userData = {
+            minP, maxP, cols, effectiveRows, xPositions, hiResCols, hiResRows, hiResData, SUBDIV_D, SUBDIV_R
+        };
+    }
+
+    // ─── Raycasting / tooltip ────────────────────────────────────────────
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    const tooltip = document.getElementById('tooltip');
+
+    const highlightGeo = new THREE.SphereBufferGeometry(0.06, 16, 16);
+    const highlightMat2 = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const highlightSphere = new THREE.Mesh(highlightGeo, highlightMat2);
+    highlightSphere.visible = false;
+    scene.add(highlightSphere);
+
+    let dropHighlightLine = null;
+    const dropHMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
+
+    function onMouseMove(event) {
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        if (!surfaceMesh) return;
+        const intersects = raycaster.intersectObject(surfaceMesh);
+
+        if (intersects.length > 0) {
+            const point = intersects[0].point;
+            highlightSphere.position.copy(point);
+            highlightSphere.visible = true;
+
+            if (dropHighlightLine) scene.remove(dropHighlightLine);
+            const pts = [new THREE.Vector3(point.x, 0, point.z), point.clone()];
+            dropHighlightLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), dropHMat);
+            scene.add(dropHighlightLine);
+
+            const ud = surfaceMesh.userData;
+            const nx = (point.x + SCALE_X / 2) / SCALE_X;
+            const nz = (point.z + SCALE_Z / 2) / SCALE_Z;
+
+            let bestD = 0;
+            let bestDist = Infinity;
+            for (let d = 0; d < ud.cols; d++) {
+                const xd = (ud.xPositions[d] + SCALE_X / 2) / SCALE_X;
+                const dist = Math.abs(xd - nx);
+                if (dist < bestDist) { bestDist = dist; bestD = d; }
+            }
+
+            const rIdx = Math.round(nz * (ud.effectiveRows - 1));
+            const repeatIdx = Math.max(0, Math.min(ud.effectiveRows - 1, rIdx));
+            const durIdx = bestD;
+
+            const power = dataGrid[repeatIdx] && dataGrid[repeatIdx][durIdx];
+            const freshPower = dataGrid[0] && dataGrid[0][durIdx];
+
+            if (power != null) {
+                const decay = freshPower != null ? Math.round((1 - power / freshPower) * 100) : '?';
+                const dur = durationLabels[durIdx];
+                const reps = repeatIdx + 1;
+                const restSecs = parseInt(restModeViz.value, 10);
+                const restDur = restSecs === 0 ? durationsSec[durIdx] : restSecs;
+                const totalWindow = reps * durationsSec[durIdx] + (reps - 1) * restDur;
+
+                function fmtSecs(s) {
+                    if (s < 60) return s + 's';
+                    if (s < 3600) return Math.floor(s/60) + 'm' + (s%60 ? s%60 + 's' : '');
+                    return (s/3600).toFixed(1) + 'h';
+                }
+                const restLabel = restSecs === 0 ? dur + ' rest' : fmtSecs(restDur) + ' rest';
+
+                tooltip.style.display = 'block';
+                tooltip.style.left = Math.min(event.clientX + 16, window.innerWidth - 220) + 'px';
+                tooltip.style.top = (event.clientY - 10) + 'px';
+                tooltip.innerHTML = `
+                    <div class="value">${Math.round(power)}W</div>
+                    <div class="label">Duration</div> ${dur} efforts<br>
+                    <div class="label">Repeats</div> ${reps}× ${dur} on / ${restLabel}<br>
+                    <div class="label">Scan window</div> ${fmtSecs(totalWindow)}<br>
+                    <div class="label">Decay from fresh</div> ${decay}%
+                `;
+            }
+        } else {
+            highlightSphere.visible = false;
+            tooltip.style.display = 'none';
+            if (dropHighlightLine) { scene.remove(dropHighlightLine); dropHighlightLine = null; }
+        }
+    }
+    window.addEventListener('mousemove', onMouseMove);
+
+    // ─── Controls ────────────────────────────────────────────────────────
+    document.getElementById('opacity-slider').addEventListener('input', e => {
+        if (surfaceMesh) surfaceMesh.material.opacity = parseFloat(e.target.value);
+    });
+    document.getElementById('wireframe-slider').addEventListener('input', e => {
+        if (wireframeMesh) wireframeMesh.material.opacity = parseFloat(e.target.value);
+    });
+    document.getElementById('reset-camera').addEventListener('click', () => {
+        camera.position.copy(DEFAULT_CAMERA);
+        controls3d.target.set(0, SCALE_Y * 0.3, 0);
+    });
+    document.getElementById('toggle-animation').addEventListener('click', e => {
+        controls3d.autoRotate = !controls3d.autoRotate;
+        e.target.textContent = `Auto-Rotate: ${controls3d.autoRotate ? 'On' : 'Off'}`;
+    });
+
+    // ─── Resize ──────────────────────────────────────────────────────────
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ─── Animate ─────────────────────────────────────────────────────────
+    controls3d.target.set(0, SCALE_Y * 0.3, 0);
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls3d.update();
+        renderer.render(scene, camera);
+    }
+    animate();
+    </script>
+    <script src="/footer.js"></script>
+    <script>
+    // The shared footer is appended to <body> at z-index:1, but this page
+    // uses overflow:hidden and a full-viewport canvas. Re-parent the footer
+    // into the upload screen so it's visible there, and fix its positioning.
+    (function() {
+      const f = document.querySelector('body > footer');
+      if (!f) return;
+      f.style.position = 'absolute';
+      f.style.bottom = '0';
+      f.style.left = '0';
+      f.style.marginTop = '0';
+      f.style.zIndex = '60';
+      document.getElementById('upload-screen').appendChild(f);
+
+      // When returning to upload screen, make sure footer is visible again
+      const obs = new MutationObserver(function() {
+        const screen = document.getElementById('upload-screen');
+        f.style.display = screen.style.display === 'none' ? 'none' : '';
+      });
+      obs.observe(document.getElementById('upload-screen'), { attributes: true, attributeFilter: ['style'] });
+    })();
+    </script>
+</body>
+</html>
