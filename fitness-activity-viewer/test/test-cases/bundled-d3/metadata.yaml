@@ -1,0 +1,21 @@
+title: "Morning Run"
+date: 2025-11-03
+type: "running"
+description: "Great morning run through the neighborhood. Weather was perfect and felt strong throughout."
+
+# Optional custom fields
+weather: "Clear, 15°C"
+effort: "Easy"
+shoes: "Nike Pegasus 40"
+
+# You can add PRs or other personal notes
+notes: |
+  - First run of the month
+  - Felt good, no injuries
+  - Trying out new route
+
+# Tags for organization
+tags:
+  - morning
+  - easy-run
+  - neighborhood

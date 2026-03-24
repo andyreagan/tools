@@ -1,0 +1,16 @@
+title: "Trail Run with Photos"
+date: 2025-11-03
+type: "trail-running"
+description: |
+  Amazing trail run through the mountains. Weather was perfect!
+
+  Took some photos of the scenic views along the way.
+
+weather: "Sunny, 18°C"
+effort: "Moderate"
+terrain: "Mountain trails"
+
+tags:
+  - trail-running
+  - mountains
+  - scenic

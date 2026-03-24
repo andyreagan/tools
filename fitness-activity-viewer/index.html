@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fitness Activity Viewer — Andy's Toolbox</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+      --mid:#666; --muted:#999; --border:#ddd; --accent:#e74c3c;
+    }
+    body{
+      font-family:system-ui,sans-serif;
+      background:var(--bg); color:var(--dark);
+      min-height:100vh; padding:3rem 1.5rem;
+    }
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0;
+      background-image:repeating-linear-gradient(
+        45deg, transparent, transparent 20px,
+        rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+      );
+    }
+    .page{max-width:760px; margin:0 auto; position:relative; z-index:1;}
+
+    header{margin-bottom:2.5rem;}
+    .back{
+      font-size:.75rem; font-weight:600; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted);
+      text-decoration:none; display:inline-block; margin-bottom:1rem;
+    }
+    .back:hover{color:var(--accent);}
+    h1{
+      font-size:clamp(1.8rem,5vw,2.5rem); font-weight:800;
+      text-transform:uppercase; letter-spacing:.02em; line-height:1.1;
+      margin-bottom:.75rem;
+    }
+    .subtitle{
+      font-size:.95rem; color:var(--mid); line-height:1.6;
+      max-width:600px;
+    }
+
+    .versions{margin-top:2rem; display:flex; flex-direction:column; gap:1.5rem;}
+
+    .card{
+      background:var(--surface);
+      border:2px solid var(--dark);
+      border-radius:4px;
+      padding:2rem;
+    }
+    .card h2{font-size:1.1rem; font-weight:700; margin-bottom:.5rem;}
+    .card p{font-size:.85rem; color:var(--mid); line-height:1.6; margin-bottom:1.25rem;}
+
+    .card-links{display:flex; gap:1rem; flex-wrap:wrap;}
+    .card-links a{
+      font-size:.8rem; font-weight:600;
+      text-decoration:none; padding:.5rem 1rem;
+      border:2px solid var(--dark); border-radius:3px;
+      color:var(--dark); background:transparent;
+      transition:background .15s, color .15s;
+    }
+    .card-links a:hover{
+      background:var(--dark); color:#fff;
+    }
+    .card-links .secondary{
+      border-color:var(--border); color:var(--mid);
+    }
+    .card-links .secondary:hover{
+      background:var(--mid); color:#fff; border-color:var(--mid);
+    }
+
+    .features{
+      margin-top:2.5rem;
+    }
+    .features h2{
+      font-size:.75rem; font-weight:600; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted);
+      margin-bottom:1rem;
+    }
+    .features ul{
+      list-style:none; padding:0;
+      display:grid; grid-template-columns:1fr 1fr; gap:.5rem;
+    }
+    .features li{
+      font-size:.82rem; color:var(--mid); line-height:1.5;
+      padding-left:1.2em; position:relative;
+    }
+    .features li::before{
+      content:'→'; position:absolute; left:0; color:var(--accent);
+    }
+
+    .note{
+      margin-top:2rem;
+      font-size:.78rem; color:var(--muted); line-height:1.6;
+    }
+    .note code{
+      background:#f5f3ef; padding:.15em .4em; border-radius:2px;
+      font-size:.75rem;
+    }
+
+    @media(max-width:480px){
+      .features ul{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <a class="back" href="/">← Back to Toolbox</a>
+    <h1>Fitness Activity Viewer</h1>
+    <p class="subtitle">
+      A self-contained, local-first fitness activity viewer for
+      <strong>.fit</strong> and <strong>.gpx</strong> files. No database, no
+      backend — just a single HTML file and your browser.
+    </p>
+  </header>
+
+  <div class="versions">
+    <div class="card">
+      <h2>Chart.js Version <span style="font-weight:400; color:var(--muted); font-size:.8rem;">— Recommended</span></h2>
+      <p>
+        Simpler API, easy to understand, great for standard fitness
+        visualizations. Lightweight and well-documented.
+      </p>
+      <div class="card-links">
+        <a href="src/single-page-chartjs.html">CDN Version (~55 KB)</a>
+        <a href="dist/single-page-chartjs-bundled.html" class="secondary">Bundled / Offline (~830 KB)</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>D3.js Version <span style="font-weight:400; color:var(--muted); font-size:.8rem;">— Advanced</span></h2>
+      <p>
+        More powerful and flexible with fine-grained control. Similar to what
+        Strava uses for its charts.
+      </p>
+      <div class="card-links">
+        <a href="src/single-page-d3.html">CDN Version (~55 KB)</a>
+        <a href="dist/single-page-d3-bundled.html" class="secondary">Bundled / Offline (~900 KB)</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="features">
+    <h2>Features</h2>
+    <ul>
+      <li>Interactive OpenStreetMap route visualization</li>
+      <li>Elevation, heart rate &amp; pace charts</li>
+      <li>Chart-to-map crosshair linking</li>
+      <li>Metric &amp; imperial unit toggle</li>
+      <li>YAML metadata support</li>
+      <li>Photo gallery from media/ folder</li>
+      <li>Metadata-only mode for gym workouts</li>
+      <li>Works with Strava &amp; Garmin exports</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <strong>Usage:</strong> Place the HTML file alongside your activity data
+    (<code>activity.fit</code>, <code>activity.gpx</code>,
+    <code>metadata.yaml</code>) and serve with any local web server.
+    Bundled versions inline all JS/CSS but still load map tiles from
+    OpenStreetMap.
+  </div>
+</div>
+<script src="/footer.js"></script>
+</body>
+</html>

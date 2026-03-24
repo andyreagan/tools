@@ -1,0 +1,19 @@
+[project]
+name = "plain-text-fitness"
+version = "0.1.0"
+description = "Self-contained fitness activity viewer"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pytest>=7.4.0",
+    "playwright>=1.40.0",
+    "pytest-playwright>=0.4.0",
+]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --tb=short"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

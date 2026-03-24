@@ -1,0 +1,1589 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity Viewer (D3 Version)</title>
+
+
+    <!-- External Libraries -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <!-- FIT SDK as ES Module - imported and made globally available -->
+    <script type="module">
+        import { Decoder, Stream } from 'https://cdn.jsdelivr.net/npm/@garmin/fitsdk@21.171.0/+esm';
+        // Expose globally for use in the main script
+        window.FitDecoder = Decoder;
+        window.FitStream = Stream;
+        // Dispatch custom event to signal FIT SDK is ready
+        window.dispatchEvent(new Event('fitsdk-ready'));
+    </script>
+
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 12px;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 15px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .activity-header {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .activity-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .activity-meta {
+            color: #666;
+            font-size: 13px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 12px 14px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 6px;
+            letter-spacing: 0.3px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .stat-unit {
+            font-size: 14px;
+            color: #666;
+            font-weight: 400;
+            margin-left: 2px;
+        }
+
+        #map {
+            height: 400px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            margin-bottom: 12px;
+        }
+
+        .charts-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .chart-card {
+            background: white;
+            padding: 14px 16px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .chart-card h3 {
+            font-size: 13px;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .chart-wrapper {
+            height: 140px;
+            position: relative;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 8px;
+        }
+
+        .chart-header h3 {
+            font-size: 13px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin: 0;
+        }
+
+        #hoverInfo {
+            font-size: 12px;
+            color: #999;
+            opacity: 0;
+            transition: opacity 0.15s;
+            white-space: nowrap;
+        }
+
+        #hoverInfo.visible {
+            opacity: 1;
+        }
+
+        #hoverDistance {
+            font-weight: 600;
+            margin-right: 12px;
+        }
+
+        /* D3-specific styles */
+        .chart-wrapper svg {
+            display: block;
+        }
+
+        .chart-area {
+            fill: none;
+        }
+
+        .chart-line {
+            fill: none;
+            stroke-width: 2;
+        }
+
+        .axis path,
+        .axis line {
+            stroke: #666;
+        }
+
+        .axis text {
+            fill: #666;
+            font-size: 11px;
+        }
+
+        .axis-label {
+            fill: #666;
+            font-size: 12px;
+        }
+
+        .grid line {
+            stroke: #e0e0e0;
+            stroke-opacity: 0.7;
+            shape-rendering: crispEdges;
+        }
+
+        .grid path {
+            stroke-width: 0;
+        }
+
+        .crosshair {
+            stroke: rgba(0, 0, 0, 0.3);
+            stroke-width: 1;
+            stroke-dasharray: 5, 5;
+            pointer-events: none;
+        }
+
+        .hover-overlay {
+            fill: none;
+            pointer-events: all;
+        }
+
+        .chart-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 3px;
+            font-size: 13px;
+            font-weight: 600;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.1s;
+            z-index: 100;
+            white-space: nowrap;
+        }
+
+        .chart-tooltip.visible {
+            opacity: 1;
+        }
+
+        .description-card {
+            background: white;
+            padding: 14px 16px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            margin-bottom: 12px;
+        }
+
+        .description-card h3 {
+            font-size: 13px;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .description-card p {
+            line-height: 1.5;
+            color: #666;
+            white-space: pre-wrap;
+            font-size: 14px;
+        }
+
+        .error {
+            background: #fee;
+            color: #c00;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .status {
+            color: #666;
+            font-size: 12px;
+            padding: 8px 12px;
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .files-detected {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            font-size: 12px;
+        }
+
+        .files-detected-label {
+            font-weight: 600;
+            color: #666;
+        }
+
+        .file-list {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+        }
+
+        .file-item a {
+            color: #fc4c02;
+            text-decoration: none;
+        }
+
+        .file-item a:hover {
+            text-decoration: underline;
+        }
+
+        .file-icon {
+            font-size: 14px;
+        }
+
+        .unit-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .unit-toggle label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #fc4c02;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .unit-label {
+            font-size: 12px;
+            color: #666;
+            min-width: 20px;
+        }
+
+        .media-thumbnails {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .media-thumbnail {
+            width: 64px;
+            height: 64px;
+            object-fit: cover;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: border-color 0.2s;
+        }
+
+        .media-thumbnail:hover {
+            border-color: #fc4c02;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            color: white;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+
+        .modal-close:hover {
+            color: #fc4c02;
+        }
+
+        .modal-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            color: white;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            background: rgba(0, 0, 0, 0.5);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+        }
+
+        .modal-nav:hover {
+            background: rgba(252, 76, 2, 0.8);
+        }
+
+        .modal-prev {
+            left: 20px;
+        }
+
+        .modal-next {
+            right: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="status" id="status">Loading activity data...</div>
+
+        <div id="error" class="error hidden"></div>
+
+        <div id="error" class="error hidden"></div>
+
+        <div id="activityContent" class="hidden">
+            <div class="top-bar">
+                <div class="activity-header">
+                    <div class="activity-title" id="activityTitle">Activity</div>
+                    <div class="activity-meta" id="activityMeta"></div>
+                </div>
+
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <div id="filesDetected" class="files-detected hidden">
+                        <span class="files-detected-label">Files:</span>
+                        <div class="file-list" id="fileList"></div>
+                    </div>
+
+                    <div id="unitToggle" class="unit-toggle hidden">
+                        <label>Units:</label>
+                        <span class="unit-label">km</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="unitSwitch">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="unit-label">mi</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="description-card" id="descriptionCard" style="display:none;">
+                <h3>Description</h3>
+                <p id="activityDescription"></p>
+                <div id="mediaThumbnails" class="media-thumbnails"></div>
+            </div>
+
+            <div id="mediaModal" class="modal">
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+                <button class="modal-nav modal-prev" onclick="navigateMedia(-1)">&#10094;</button>
+                <img id="modalImage" class="modal-content" src="" alt="">
+                <button class="modal-nav modal-next" onclick="navigateMedia(1)">&#10095;</button>
+            </div>
+
+            <div class="stats-grid" id="statsGrid"></div>
+
+            <div id="map"></div>
+            
+            <!-- All charts in one container -->
+            <div style="background: white; padding: 12px 14px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 12px;">
+                <!-- Charts stacked vertically -->
+                <div style="margin-bottom: 12px;">
+                    <div class="chart-header">
+                        <h3>Elevation Profile</h3>
+                        <div id="hoverInfo">
+                            <span id="hoverDistance"></span>
+                            <span id="hoverTime"></span>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper" id="elevationChart"></div>
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <div class="chart-header">
+                        <h3>Heart Rate</h3>
+                    </div>
+                    <div class="chart-wrapper" id="heartRateChart"></div>
+                </div>
+                <div style="margin-bottom: 0;">
+                    <div class="chart-header">
+                        <h3>Pace</h3>
+                    </div>
+                    <div class="chart-wrapper" id="paceChart"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state - explicitly on window for accessibility
+        window.activityData = {
+            fit: null,
+            gpx: null,
+            metadata: null,
+            records: [],
+            detectedFiles: []
+        };
+
+        window.map = null;
+        window.polyline = null;
+        window.hoverMarker = null;
+
+        window.useImperial = false;
+        window.mediaFiles = [];
+        window.currentMediaIndex = 0;
+
+        // Local aliases for convenience
+        let activityData = window.activityData;
+        let map = window.map;
+        let polyline = window.polyline;
+        let hoverMarker = window.hoverMarker;
+        let useImperial = window.useImperial;
+        let mediaFiles = window.mediaFiles;
+        let currentMediaIndex = window.currentMediaIndex;
+
+        // D3 chart state - shared across all charts for coordinated interaction
+        const chartState = {
+            charts: [],  // Array of chart objects
+            bisect: d3.bisector(d => d.distance).left,
+            currentHoverData: null
+        };
+
+        // Conversion constants
+        const KM_TO_MI = 0.621371;
+        const M_TO_FT = 3.28084;
+
+        // Auto-load on page load - wait for both DOM and FIT SDK to be ready
+        let domReady = false;
+        let fitSdkReady = !!(window.FitDecoder && window.FitStream); // Check if already loaded
+
+        function tryAutoLoad() {
+            if (domReady && fitSdkReady) {
+                autoLoadActivity();
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            domReady = true;
+            tryAutoLoad();
+        });
+
+        window.addEventListener('fitsdk-ready', () => {
+            fitSdkReady = true;
+            tryAutoLoad();
+        });
+
+        // If FIT SDK is already available, try loading now
+        tryAutoLoad();
+
+        // Unit toggle handler
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('unitSwitch').addEventListener('change', (e) => {
+                useImperial = e.target.checked;
+                if (activityData.summary) {
+                    renderActivity();
+                }
+            });
+        });
+
+        async function autoLoadActivity() {
+            const filesToTry = [
+                { path: 'activity.fit', type: 'fit', name: 'activity.fit' },
+                { path: 'activity.gpx', type: 'gpx', name: 'activity.gpx' },
+                { path: 'metadata.yaml', type: 'metadata', name: 'metadata.yaml' },
+                { path: 'metadata.yml', type: 'metadata', name: 'metadata.yml' },
+                { path: 'metadata.org', type: 'metadata', name: 'metadata.org' }
+            ];
+
+            showStatus('Loading activity files...');
+
+            try {
+                for (const file of filesToTry) {
+                    try {
+                        const response = await fetch(file.path);
+                        if (response.ok) {
+                            activityData.detectedFiles.push({
+                                name: file.name,
+                                path: file.path,
+                                type: file.type
+                            });
+
+                            if (file.type === 'fit') {
+                                showStatus('Parsing .fit file...');
+                                const arrayBuffer = await response.arrayBuffer();
+                                activityData.fit = await parseFitData(arrayBuffer);
+                            } else if (file.type === 'gpx') {
+                                showStatus('Parsing .gpx file...');
+                                const text = await response.text();
+                                activityData.gpx = parseGpxData(text);
+                            } else if (file.type === 'metadata') {
+                                showStatus('Loading metadata...');
+                                const text = await response.text();
+                                activityData.metadata = parseMetadata(text, file.path);
+                            }
+                        }
+                    } catch (error) {
+                        console.log(`Could not load ${file.path}:`, error.message);
+                    }
+                }
+
+                if (activityData.detectedFiles.length > 0) {
+                    showDetectedFiles();
+                }
+
+                await detectMediaFiles();
+
+                if (!activityData.fit && !activityData.gpx && !activityData.metadata) {
+                    showError('No activity files or metadata found. Please ensure activity.fit, activity.gpx, or metadata.yaml exists in the same directory.');
+                    return;
+                }
+
+                if (activityData.fit || activityData.gpx) {
+                    showStatus('Processing activity data...');
+                    mergeActivityData();
+                }
+
+                showStatus('Rendering activity...');
+
+                // Show content first so containers have width
+                document.getElementById('activityContent').classList.remove('hidden');
+                if (activityData.fit || activityData.gpx) {
+                    document.getElementById('unitToggle').classList.remove('hidden');
+                }
+
+                // Then render (charts need visible containers to measure)
+                renderActivity();
+                hideStatus();
+            } catch (error) {
+                console.error('Error loading activity:', error);
+                showError('Error loading activity: ' + error.message);
+                hideStatus();
+            }
+        }
+
+        async function detectMediaFiles() {
+            const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+            const videoExtensions = ['.mp4', '.mov', '.avi', '.webm'];
+
+            try {
+                const response = await fetch('media/');
+                if (!response.ok) return;
+
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const links = doc.querySelectorAll('a');
+
+                mediaFiles = [];
+                links.forEach(link => {
+                    const href = link.getAttribute('href');
+                    if (!href || href === '../') return;
+
+                    const lower = href.toLowerCase();
+                    const isImage = imageExtensions.some(ext => lower.endsWith(ext));
+                    const isVideo = videoExtensions.some(ext => lower.endsWith(ext));
+
+                    if (isImage || isVideo) {
+                        mediaFiles.push({
+                            path: 'media/' + href,
+                            type: isImage ? 'image' : 'video',
+                            name: href
+                        });
+                    }
+                });
+
+                if (mediaFiles.length > 0) {
+                    renderMediaThumbnails();
+                }
+            } catch (error) {
+                console.log('Could not detect media files:', error.message);
+            }
+        }
+
+        function renderMediaThumbnails() {
+            const container = document.getElementById('mediaThumbnails');
+            container.innerHTML = '';
+
+            mediaFiles.forEach((media, index) => {
+                if (media.type === 'image') {
+                    const img = document.createElement('img');
+                    img.src = media.path;
+                    img.className = 'media-thumbnail';
+                    img.alt = media.name;
+                    img.onclick = () => openModal(index);
+                    container.appendChild(img);
+                }
+            });
+
+            if (mediaFiles.length > 0) {
+                document.getElementById('descriptionCard').style.display = 'block';
+            }
+        }
+
+        function openModal(index) {
+            currentMediaIndex = index;
+            const media = mediaFiles[index];
+            const modal = document.getElementById('mediaModal');
+            const modalImg = document.getElementById('modalImage');
+
+            if (media.type === 'image') {
+                modalImg.src = media.path;
+                modal.classList.add('active');
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('mediaModal').classList.remove('active');
+        }
+
+        function navigateMedia(direction) {
+            currentMediaIndex = (currentMediaIndex + direction + mediaFiles.length) % mediaFiles.length;
+            const media = mediaFiles[currentMediaIndex];
+            document.getElementById('modalImage').src = media.path;
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            } else if (e.key === 'ArrowLeft') {
+                navigateMedia(-1);
+            } else if (e.key === 'ArrowRight') {
+                navigateMedia(1);
+            }
+        });
+
+        function showDetectedFiles() {
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = '';
+
+            activityData.detectedFiles.forEach(file => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+
+                const icon = file.type === 'fit' ? '📊' : file.type === 'gpx' ? '🗺️' : '📄';
+
+                fileItem.innerHTML = `
+                    <span class="file-icon">${icon}</span>
+                    <a href="${file.path}" download="${file.name}">${file.name}</a>
+                `;
+                fileList.appendChild(fileItem);
+            });
+
+            document.getElementById('filesDetected').classList.remove('hidden');
+        }
+
+        async function parseFitData(arrayBuffer) {
+            try {
+                // Wait for ES module to load and expose globals
+                while (!window.FitDecoder || !window.FitStream) {
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+
+                // Create stream from ArrayBuffer
+                const stream = window.FitStream.fromArrayBuffer(arrayBuffer);
+
+                // Create decoder
+                const decoder = new window.FitDecoder(stream);
+
+                // Check if it's a valid FIT file
+                if (!decoder.isFIT()) {
+                    throw new Error('Not a valid FIT file');
+                }
+
+                // Check integrity (optional but recommended)
+                if (!decoder.checkIntegrity()) {
+                    console.warn('FIT file integrity check failed, but continuing...');
+                }
+
+                // Decode the file
+                const { messages, errors } = decoder.read({
+                    applyScaleAndOffset: true,
+                    expandSubFields: true,
+                    expandComponents: true,
+                    convertTypesToStrings: false,
+                    convertDateTimesToDates: true,
+                    mergeHeartRates: true
+                });
+
+                // Log any errors but don't fail
+                if (errors && errors.length > 0) {
+                    console.warn('FIT decode errors:', errors);
+                }
+
+                // Convert semicircles to degrees (Garmin FIT format)
+                // Semicircles: value * (180 / 2^31)
+                const semicirclesToDegrees = (semicircles) => {
+                    if (semicircles == null) return null;
+                    return semicircles * (180 / Math.pow(2, 31));
+                };
+
+                // Map Garmin SDK field names (camelCase) to old format (snake_case)
+                const records = (messages.recordMesgs || []).map(record => ({
+                    timestamp: record.timestamp,
+                    position_lat: semicirclesToDegrees(record.positionLat),
+                    position_long: semicirclesToDegrees(record.positionLong),
+                    latitude: semicirclesToDegrees(record.positionLat),
+                    longitude: semicirclesToDegrees(record.positionLong),
+                    altitude: record.altitude,
+                    enhanced_altitude: record.enhancedAltitude,
+                    distance: record.distance,
+                    speed: record.speed,
+                    enhanced_speed: record.enhancedSpeed,
+                    heart_rate: record.heartRate,
+                    cadence: record.cadence,
+                    power: record.power,
+                    temperature: record.temperature
+                }));
+
+                // Return in the format expected by our code
+                return { records };
+            } catch (error) {
+                throw new Error(`Failed to parse FIT file: ${error.message}`);
+            }
+        }
+
+        function parseGpxData(xmlString) {
+            try {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+
+                const trackPoints = xmlDoc.getElementsByTagName('trkpt');
+                const points = [];
+
+                for (let i = 0; i < trackPoints.length; i++) {
+                    const pt = trackPoints[i];
+                    const lat = parseFloat(pt.getAttribute('lat'));
+                    const lon = parseFloat(pt.getAttribute('lon'));
+
+                    const eleElement = pt.getElementsByTagName('ele')[0];
+                    const timeElement = pt.getElementsByTagName('time')[0];
+                    const hrElement = pt.getElementsByTagNameNS('*', 'hr')[0];
+
+                    const point = {
+                        latitude: lat,
+                        longitude: lon,
+                        elevation: eleElement ? parseFloat(eleElement.textContent) : null,
+                        timestamp: timeElement ? new Date(timeElement.textContent) : null,
+                        heartRate: hrElement ? parseInt(hrElement.textContent) : null
+                    };
+
+                    points.push(point);
+                }
+
+                return { points };
+            } catch (error) {
+                throw new Error('Failed to parse GPX: ' + error.message);
+            }
+        }
+
+        function parseMetadata(content, filename) {
+            try {
+                if (filename.endsWith('.yaml') || filename.endsWith('.yml')) {
+                    return jsyaml.load(content);
+                } else if (filename.endsWith('.org')) {
+                    return parseOrgFile(content);
+                }
+            } catch (error) {
+                throw new Error('Failed to parse metadata: ' + error.message);
+            }
+        }
+
+        function parseOrgFile(content) {
+            const metadata = {};
+            const lines = content.split('\n');
+            let descriptionLines = [];
+
+            for (const line of lines) {
+                const propMatch = line.match(/^#\+(\w+):\s*(.+)$/);
+                if (propMatch) {
+                    const key = propMatch[1].toLowerCase();
+                    metadata[key] = propMatch[2].trim();
+                    continue;
+                }
+
+                const drawerMatch = line.match(/^:(\w+):\s*(.+)$/);
+                if (drawerMatch) {
+                    const key = drawerMatch[1].toLowerCase();
+                    metadata[key] = drawerMatch[2].trim();
+                    continue;
+                }
+
+                if (line.trim() && !line.startsWith('#') && !line.startsWith(':')) {
+                    descriptionLines.push(line);
+                }
+            }
+
+            if (descriptionLines.length > 0) {
+                metadata.description = descriptionLines.join('\n');
+            }
+
+            return metadata;
+        }
+
+        function mergeActivityData() {
+            if (activityData.fit && activityData.fit.records) {
+                activityData.records = activityData.fit.records.map(record => ({
+                    timestamp: record.timestamp,
+                    latitude: record.position_lat,
+                    longitude: record.position_long,
+                    elevation: record.altitude || record.enhanced_altitude,
+                    heartRate: record.heart_rate,
+                    speed: record.speed || record.enhanced_speed,
+                    cadence: record.cadence,
+                    power: record.power,
+                    temperature: record.temperature
+                })).filter(r => r.latitude && r.longitude);
+            } else if (activityData.gpx && activityData.gpx.points) {
+                activityData.records = activityData.gpx.points;
+            }
+
+            calculateMetrics();
+        }
+
+        function calculateMetrics() {
+            if (activityData.records.length === 0) return;
+
+            const records = activityData.records;
+
+            let totalDistance = 0;
+            for (let i = 1; i < records.length; i++) {
+                const dist = calculateDistance(
+                    records[i-1].latitude, records[i-1].longitude,
+                    records[i].latitude, records[i].longitude
+                );
+                totalDistance += dist;
+                records[i].distance = totalDistance;
+
+                if (!records[i].speed && records[i].timestamp && records[i-1].timestamp) {
+                    const timeDiff = (records[i].timestamp - records[i-1].timestamp) / 1000;
+                    if (timeDiff > 0) {
+                        records[i].speed = (dist / timeDiff) * 3600;
+                    }
+                }
+            }
+            records[0].distance = 0;
+
+            let elevationGain = 0;
+            let elevationLoss = 0;
+            for (let i = 1; i < records.length; i++) {
+                if (records[i].elevation && records[i-1].elevation) {
+                    const diff = records[i].elevation - records[i-1].elevation;
+                    if (diff > 0) elevationGain += diff;
+                    else elevationLoss += Math.abs(diff);
+                }
+            }
+
+            let duration = 0;
+            if (records[0].timestamp && records[records.length - 1].timestamp) {
+                duration = (records[records.length - 1].timestamp - records[0].timestamp) / 1000;
+            }
+
+            const speeds = records.filter(r => r.speed && r.speed > 0).map(r => r.speed);
+            const heartRates = records.filter(r => r.heartRate).map(r => r.heartRate);
+
+            let avgSpeed = 0;
+            if (speeds.length > 0) {
+                avgSpeed = average(speeds);
+            } else if (totalDistance > 0 && duration > 0) {
+                avgSpeed = (totalDistance / duration) * 3600;
+            }
+
+            activityData.summary = {
+                distance: totalDistance,
+                duration: duration,
+                elevationGain: elevationGain,
+                elevationLoss: elevationLoss,
+                avgSpeed: avgSpeed,
+                maxSpeed: speeds.length > 0 ? Math.max(...speeds) : 0,
+                avgHeartRate: heartRates.length > 0 ? average(heartRates) : 0,
+                maxHeartRate: heartRates.length > 0 ? Math.max(...heartRates) : 0,
+                startTime: records[0].timestamp,
+                endTime: records[records.length - 1].timestamp
+            };
+        }
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = toRad(lat2 - lat1);
+            const dLon = toRad(lon2 - lon1);
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function toRad(degrees) {
+            return degrees * Math.PI / 180;
+        }
+
+        function average(arr) {
+            return arr.reduce((a, b) => a + b, 0) / arr.length;
+        }
+
+        function renderActivity() {
+            const title = activityData.metadata?.title ||
+                          activityData.metadata?.name ||
+                          'Activity';
+            document.getElementById('activityTitle').textContent = title;
+
+            let dateStr = '';
+            if (activityData.metadata?.date) {
+                const metaDate = new Date(activityData.metadata.date);
+                dateStr = metaDate.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+            } else if (activityData.summary?.startTime) {
+                dateStr = new Date(activityData.summary.startTime).toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            }
+
+            let metaStr = dateStr;
+            if (activityData.metadata?.type) {
+                metaStr += dateStr ? ' • ' + activityData.metadata.type : activityData.metadata.type;
+            }
+            document.getElementById('activityMeta').textContent = metaStr;
+
+            if (activityData.metadata?.description) {
+                document.getElementById('descriptionCard').style.display = 'block';
+                document.getElementById('activityDescription').textContent = activityData.metadata.description;
+            }
+
+            if (activityData.summary) {
+                renderStats();
+                renderMap();
+
+                // Render charts after a brief delay to ensure containers are laid out
+                setTimeout(() => {
+                    renderChartsD3();
+                }, 50);
+            }
+        }
+
+        function renderStats() {
+            const statsGrid = document.getElementById('statsGrid');
+            statsGrid.innerHTML = '';
+
+            const summary = activityData.summary;
+
+            const distance = useImperial ? summary.distance * KM_TO_MI : summary.distance;
+            const elevationGain = useImperial ? summary.elevationGain * M_TO_FT : summary.elevationGain;
+            const distanceUnit = useImperial ? 'mi' : 'km';
+            const elevationUnit = useImperial ? 'ft' : 'm';
+            const paceUnit = useImperial ? '/mi' : '/km';
+
+            const stats = [
+                {
+                    label: 'Distance',
+                    value: distance.toFixed(2),
+                    unit: distanceUnit
+                },
+                {
+                    label: 'Duration',
+                    value: formatDuration(summary.duration),
+                    unit: ''
+                },
+                {
+                    label: 'Avg Pace',
+                    value: formatPace(summary.avgSpeed, useImperial),
+                    unit: paceUnit
+                },
+                {
+                    label: 'Elevation Gain',
+                    value: Math.round(elevationGain),
+                    unit: elevationUnit
+                },
+                {
+                    label: 'Avg Heart Rate',
+                    value: Math.round(summary.avgHeartRate) || '--',
+                    unit: 'bpm'
+                },
+                {
+                    label: 'Max Heart Rate',
+                    value: Math.round(summary.maxHeartRate) || '--',
+                    unit: 'bpm'
+                }
+            ];
+
+            stats.forEach(stat => {
+                const card = document.createElement('div');
+                card.className = 'stat-card';
+                card.innerHTML = `
+                    <div class="stat-label">${stat.label}</div>
+                    <div>
+                        <span class="stat-value">${stat.value}</span>
+                        <span class="stat-unit">${stat.unit}</span>
+                    </div>
+                `;
+                statsGrid.appendChild(card);
+            });
+        }
+
+        function formatDuration(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+
+            if (hours > 0) {
+                return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            }
+            return `${minutes}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function formatPace(speedKmh, imperial = false) {
+            if (!speedKmh || speedKmh === 0) return '--';
+
+            let minPerUnit;
+            if (imperial) {
+                const speedMph = speedKmh * KM_TO_MI;
+                minPerUnit = 60 / speedMph;
+            } else {
+                minPerUnit = 60 / speedKmh;
+            }
+
+            const minutes = Math.floor(minPerUnit);
+            const seconds = Math.round((minPerUnit - minutes) * 60);
+            return `${minutes}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function renderMap() {
+            if (map) {
+                map.remove();
+            }
+
+            map = L.map('map');
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+
+            const coords = activityData.records.map(r => [r.latitude, r.longitude]);
+
+            if (coords.length > 0) {
+                polyline = L.polyline(coords, {
+                    color: '#fc4c02',
+                    weight: 3,
+                    opacity: 0.8
+                }).addTo(map);
+
+                const startIcon = L.divIcon({
+                    className: 'custom-marker',
+                    html: '<div style="background-color: #22c55e; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; font-size: 12px;">S</div>',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                });
+
+                const finishIcon = L.divIcon({
+                    className: 'custom-marker',
+                    html: '<div style="background-color: #ef4444; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; font-size: 12px;">F</div>',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                });
+
+                L.marker(coords[0], { icon: startIcon }).addTo(map).bindPopup('Start');
+                L.marker(coords[coords.length - 1], { icon: finishIcon }).addTo(map).bindPopup('Finish');
+
+                setTimeout(() => {
+                    map.invalidateSize();
+                    map.fitBounds(polyline.getBounds(), {
+                        padding: [50, 50],
+                        maxZoom: 15
+                    });
+                }, 100);
+            }
+        }
+
+        function updateMapHover(record) {
+            if (!map || !record) return;
+
+            const coords = [record.latitude, record.longitude];
+
+            if (hoverMarker) {
+                map.removeLayer(hoverMarker);
+            }
+
+            const hoverIcon = L.divIcon({
+                className: 'hover-marker',
+                html: '<div style="background-color: #3b82f6; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.4);"></div>',
+                iconSize: [12, 12],
+                iconAnchor: [6, 6]
+            });
+
+            hoverMarker = L.marker(coords, { icon: hoverIcon }).addTo(map);
+        }
+
+        function clearMapHover() {
+            if (hoverMarker) {
+                map.removeLayer(hoverMarker);
+                hoverMarker = null;
+            }
+        }
+
+        // D3 Chart rendering with coordinated hover
+        function renderChartsD3() {
+            // Clear previous charts
+            chartState.charts = [];
+
+            const records = activityData.records;
+
+            // Prepare data
+            const data = records.map(r => ({
+                distance: useImperial ? (r.distance || 0) * KM_TO_MI : (r.distance || 0),
+                elevation: useImperial ? (r.elevation || 0) * M_TO_FT : (r.elevation || 0),
+                heartRate: r.heartRate || null,
+                pace: r.speed && r.speed > 0 ? (useImperial ? 60 / (r.speed * KM_TO_MI) : 60 / r.speed) : null,
+                record: r  // Keep reference to original record for map updates
+            }));
+
+            const distanceUnit = useImperial ? 'mi' : 'km';
+            const elevationUnit = useImperial ? 'ft' : 'm';
+            const paceUnit = useImperial ? 'min/mi' : 'min/km';
+
+            // Chart configurations
+            const chartConfigs = [
+                {
+                    container: '#elevationChart',
+                    yField: 'elevation',
+                    yLabel: `Elevation (${elevationUnit})`,
+                    color: '#4bc0c0',
+                    fillColor: 'rgba(75, 192, 192, 0.2)',
+                    format: d => `${Math.round(d)} ${elevationUnit}`
+                },
+                {
+                    container: '#heartRateChart',
+                    yField: 'heartRate',
+                    yLabel: 'Heart Rate (bpm)',
+                    color: '#ff6384',
+                    fillColor: 'rgba(255, 99, 132, 0.2)',
+                    format: d => d ? `${Math.round(d)} bpm` : 'N/A'
+                },
+                {
+                    container: '#paceChart',
+                    yField: 'pace',
+                    yLabel: `Pace (${paceUnit})`,
+                    color: '#36a2eb',
+                    fillColor: 'rgba(54, 162, 235, 0.2)',
+                    format: d => {
+                        if (!d) return 'N/A';
+                        const minutes = Math.floor(d);
+                        const seconds = Math.round((d - minutes) * 60);
+                        return `${minutes}:${String(seconds).padStart(2, '0')} /${useImperial ? 'mi' : 'km'}`;
+                    },
+                    yReverse: true
+                }
+            ];
+
+            // Create each chart
+            chartConfigs.forEach(config => {
+                const chart = createD3Chart(config.container, data, config);
+                if (chart) {
+                    chartState.charts.push(chart);
+                }
+            });
+        }
+
+        function createD3Chart(containerId, data, config) {
+            const container = d3.select(containerId);
+            container.selectAll('*').remove();  // Clear previous content
+
+            const margin = { top: 10, right: 20, bottom: 40, left: 60 };
+            const containerWidth = container.node().getBoundingClientRect().width;
+
+            // Ensure we have a valid width
+            if (containerWidth <= 0) {
+                console.warn(`Container ${containerId} has invalid width, skipping chart creation`);
+                return null;
+            }
+
+            const width = containerWidth - margin.left - margin.right;
+            const height = 140 - margin.top - margin.bottom;
+
+            const svg = container.append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom);
+
+            const g = svg.append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+
+            // Scales
+            const xScale = d3.scaleLinear()
+                .domain(d3.extent(data, d => d.distance))
+                .range([0, width]);
+
+            const yData = data.map(d => d[config.yField]).filter(v => v !== null);
+            const yExtent = d3.extent(yData);
+
+            const yScale = d3.scaleLinear()
+                .domain(config.yReverse ? [yExtent[1], yExtent[0]] : yExtent)
+                .range([height, 0])
+                .nice();
+
+            // Axes
+            const xAxis = d3.axisBottom(xScale)
+                .ticks(8)
+                .tickFormat(d => d.toFixed(1));
+
+            const yAxis = d3.axisLeft(yScale)
+                .ticks(5)
+                .tickFormat(d => {
+                    if (config.yField === 'pace') {
+                        const minutes = Math.floor(d);
+                        const seconds = Math.round((d - minutes) * 60);
+                        return `${minutes}:${String(seconds).padStart(2, '0')}`;
+                    }
+                    return Math.round(d);
+                });
+
+            // Add horizontal grid lines FIRST (so they're underneath data)
+            g.append('g')
+                .attr('class', 'grid')
+                .call(d3.axisLeft(yScale)
+                    .ticks(3)
+                    .tickSize(-width)
+                    .tickFormat('')
+                );
+
+            // Area generator
+            const area = d3.area()
+                .defined(d => d[config.yField] !== null)
+                .x(d => xScale(d.distance))
+                .y0(height)
+                .y1(d => yScale(d[config.yField]))
+                .curve(d3.curveMonotoneX);
+
+            // Line generator
+            const line = d3.line()
+                .defined(d => d[config.yField] !== null)
+                .x(d => xScale(d.distance))
+                .y(d => yScale(d[config.yField]))
+                .curve(d3.curveMonotoneX);
+
+            // Draw area
+            g.append('path')
+                .datum(data)
+                .attr('class', 'chart-area')
+                .attr('fill', config.fillColor)
+                .attr('d', area);
+
+            // Draw line
+            g.append('path')
+                .datum(data)
+                .attr('class', 'chart-line')
+                .attr('stroke', config.color)
+                .attr('d', line);
+
+            g.append('g')
+                .attr('class', 'axis')
+                .attr('transform', `translate(0,${height})`)
+                .call(xAxis);
+
+            g.append('g')
+                .attr('class', 'axis')
+                .call(yAxis);
+
+            // Axis labels
+            g.append('text')
+                .attr('class', 'axis-label')
+                .attr('text-anchor', 'middle')
+                .attr('x', width / 2)
+                .attr('y', height + 35)
+                .text(`Distance (${data[0].distance !== undefined ? (useImperial ? 'mi' : 'km') : ''})`);
+
+            g.append('text')
+                .attr('class', 'axis-label')
+                .attr('text-anchor', 'middle')
+                .attr('transform', 'rotate(-90)')
+                .attr('y', -45)
+                .attr('x', -height / 2)
+                .text(config.yLabel);
+
+            // Crosshair line (hidden by default)
+            const crosshair = g.append('line')
+                .attr('class', 'crosshair')
+                .attr('y1', 0)
+                .attr('y2', height)
+                .style('display', 'none');
+
+            // Create tooltip for this chart
+            const tooltip = container.append('div')
+                .attr('class', 'chart-tooltip');
+
+            // Hover overlay for mouse tracking
+            const overlay = g.append('rect')
+                .attr('class', 'hover-overlay')
+                .attr('width', width)
+                .attr('height', height);
+
+            // Shared hover handler - THIS IS THE KEY SIMPLIFICATION
+            overlay.on('mousemove', function(event) {
+                const [mouseX, mouseY] = d3.pointer(event);
+                const distance = xScale.invert(mouseX);
+                const index = chartState.bisect(data, distance, 1);
+                const d0 = data[index - 1];
+                const d1 = data[index];
+                const d = distance - d0.distance > d1.distance - distance ? d1 : d0;
+
+                // Update all charts and map
+                updateAllChartsHover(d);
+            })
+            .on('mouseleave', () => {
+                clearAllChartsHover();
+            });
+
+            return {
+                svg,
+                g,
+                crosshair,
+                tooltip,
+                xScale,
+                yScale,
+                margin,
+                config
+            };
+        }
+
+        // Coordinated hover update - much simpler than Chart.js version!
+        function updateAllChartsHover(data) {
+            chartState.currentHoverData = data;
+
+            // Update all chart crosshairs and tooltips
+            chartState.charts.forEach(chart => {
+                const x = chart.xScale(data.distance);
+                chart.crosshair
+                    .attr('x1', x)
+                    .attr('x2', x)
+                    .style('display', null);
+
+                // Show tooltip for this chart
+                const value = data[chart.config.yField];
+                if (value !== null && value !== undefined) {
+                    const y = chart.yScale(value);
+                    chart.tooltip
+                        .html(chart.config.format(value))
+                        .classed('visible', true)
+                        .style('left', (x + chart.margin.left + 10) + 'px')
+                        .style('top', (y + chart.margin.top - 15) + 'px');
+                } else {
+                    chart.tooltip.classed('visible', false);
+                }
+            });
+
+            // Update map
+            updateMapHover(data.record);
+
+            // Update hover info (time and distance)
+            const hoverInfo = document.getElementById('hoverInfo');
+            const hoverDistance = document.getElementById('hoverDistance');
+            const hoverTime = document.getElementById('hoverTime');
+
+            if (hoverInfo && hoverDistance && hoverTime) {
+                const distanceUnit = useImperial ? 'mi' : 'km';
+                hoverDistance.textContent = `Distance: ${data.distance.toFixed(2)} ${distanceUnit}`;
+
+                // Calculate time if we have timestamps
+                if (data.record.timestamp && activityData.records[0].timestamp) {
+                    const elapsedMs = data.record.timestamp - activityData.records[0].timestamp;
+                    const elapsedSec = Math.floor(elapsedMs / 1000);
+                    const hours = Math.floor(elapsedSec / 3600);
+                    const minutes = Math.floor((elapsedSec % 3600) / 60);
+                    const seconds = elapsedSec % 60;
+
+                    if (hours > 0) {
+                        hoverTime.textContent = `Time: ${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                    } else {
+                        hoverTime.textContent = `Time: ${minutes}:${String(seconds).padStart(2, '0')}`;
+                    }
+                } else {
+                    hoverTime.textContent = '';
+                }
+
+                hoverInfo.classList.add('visible');
+            }
+        }
+
+        function clearAllChartsHover() {
+            chartState.currentHoverData = null;
+
+            // Hide all crosshairs and tooltips
+            chartState.charts.forEach(chart => {
+                chart.crosshair.style('display', 'none');
+                chart.tooltip.classed('visible', false);
+            });
+
+            // Clear map hover
+            clearMapHover();
+
+            // Hide hover info
+            document.getElementById('hoverInfo').classList.remove('visible');
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+
+        function hideError() {
+            document.getElementById('error').classList.add('hidden');
+        }
+
+        function showStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+
+        function hideStatus() {
+            document.getElementById('status').style.display = 'none';
+        }
+    </script>
+
+
+</body></html>
