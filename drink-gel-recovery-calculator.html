@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Drink / Gel / Recovery Calculator — Andy's Toolbox</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+      --mid:#666; --muted:#999; --border:#ddd; --accent:#e74c3c;
+      --green:#27ae60; --blue:#2980b9;
+    }
+    body{
+      font-family:system-ui,sans-serif;
+      background:var(--bg); color:var(--dark);
+      min-height:100vh; display:flex; flex-direction:column;
+      align-items:center; padding:2rem 1rem;
+    }
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0;
+      background-image:repeating-linear-gradient(
+        45deg, transparent, transparent 20px,
+        rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+      );
+    }
+    .page{position:relative;z-index:1;width:min(820px,100%);margin:auto 0;}
+
+    header{margin-bottom:2rem; text-align:center;}
+    h1{
+      font-weight:700;
+      font-size:clamp(1.6rem,5vw,2.8rem); text-transform:uppercase;
+      letter-spacing:.04em; line-height:1;
+    }
+    h1 .slash{color:var(--accent); margin:0 .1em;}
+    .tagline{
+      font-size:.8rem; color:var(--muted); letter-spacing:.1em;
+      text-transform:uppercase; margin-top:.4rem;
+    }
+    h2{
+      font-size:.9rem; font-weight:700; text-transform:uppercase;
+      letter-spacing:.1em; color:var(--muted); margin-bottom:1rem;
+      padding-bottom:.5rem; border-bottom:1px solid var(--border);
+    }
+
+    .card{
+      background:var(--surface); border:2px solid var(--dark);
+      border-radius:4px; padding:1.5rem 2rem; margin-bottom:1rem;
+    }
+
+    /* Tabs */
+    .toggle{
+      display:flex; border:2px solid var(--dark);
+      border-radius:4px; overflow:hidden; margin-bottom:1.5rem;
+      width:fit-content;
+    }
+    .toggle-btn{
+      font-family:system-ui,sans-serif;
+      font-weight:600; font-size:.8rem; letter-spacing:.08em;
+      text-transform:uppercase;
+      padding:.55rem 1.2rem; border:none; cursor:pointer;
+      background:transparent; color:var(--mid); transition:all .15s;
+    }
+    .toggle-btn:not(:last-child){border-right:2px solid var(--dark);}
+    .toggle-btn.active{background:var(--dark); color:#fff;}
+    .toggle-btn:hover:not(.active){background:#fafafa;}
+
+    .tab-panel{display:none;}
+    .tab-panel.active{display:block;}
+
+    /* Inputs */
+    input[type=number]{
+      font-family:system-ui,sans-serif;
+      font-size:.95rem; padding:.35rem .5rem;
+      border:2px solid var(--border); border-radius:3px;
+      background:#fafafa; color:var(--dark);
+      text-align:right; width:85px;
+      transition:border-color .15s;
+    }
+    input[type=number]:focus{outline:none; border-color:var(--dark);}
+
+    /* Tables */
+    table{width:100%; border-collapse:collapse; margin-bottom:.5rem;}
+    th,td{padding:.45rem .5rem; text-align:left; font-size:.85rem;}
+    th{
+      font-size:.65rem; font-weight:600; letter-spacing:.1em;
+      text-transform:uppercase; color:var(--muted);
+    }
+    tbody td{border-bottom:1px solid var(--border);}
+    .unit{color:var(--muted); font-size:.8rem;}
+    .computed{font-weight:600; color:var(--dark);}
+    .highlight{color:var(--accent); font-weight:700;}
+
+    /* Results */
+    .results-row{
+      display:flex; gap:1rem; flex-wrap:wrap;
+      margin-top:.75rem;
+    }
+    .result-box{
+      text-align:center; padding:1rem 1.5rem;
+      border:2px solid var(--dark); border-radius:4px;
+      background:#fafafa; flex:1; min-width:150px;
+    }
+    .result-label{
+      font-size:.65rem; font-weight:600; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted); margin-bottom:.25rem;
+    }
+    .result-value{
+      font-weight:700; font-size:1.8rem; line-height:1;
+      color:var(--dark);
+    }
+    .result-value.accent{color:var(--accent);}
+    .result-value.green{color:var(--green);}
+    .result-value.blue{color:var(--blue);}
+    .result-unit{font-size:.75rem; font-weight:400; color:var(--muted);}
+
+    /* Cost comparison boxes */
+    .cost-row{
+      display:flex; gap:1rem; flex-wrap:wrap; margin-top:1rem;
+    }
+    .cost-box{
+      flex:1; min-width:180px; padding:1rem 1.25rem;
+      border:2px solid var(--border); border-radius:4px;
+      background:#fafafa;
+    }
+    .cost-box h3{
+      font-size:.65rem; font-weight:600; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted); margin-bottom:.6rem;
+    }
+    .cost-box .price{
+      font-weight:700; font-size:1.4rem; line-height:1;
+    }
+    .cost-box .price.good{color:var(--green);}
+    .cost-box .price.bad{color:var(--accent);}
+    .cost-box .detail{font-size:.8rem; color:var(--mid); margin-top:.3rem;}
+
+    /* Concentration calculator */
+    .conc-row{
+      display:flex; align-items:center; gap:.75rem; flex-wrap:wrap;
+      padding:1rem; background:#fafafa; border:2px solid var(--border);
+      border-radius:4px; margin-top:1rem;
+    }
+    .conc-row label{font-size:.85rem; color:var(--mid);}
+    .conc-out{font-weight:700; font-size:1rem; color:var(--dark);}
+    .conc-out.accent{color:var(--accent);}
+
+    /* Notes */
+    .note{
+      margin-top:1rem; font-size:.72rem; color:var(--muted);
+      line-height:1.6; border-left:3px solid var(--border);
+      padding-left:.75rem;
+    }
+    .notes-list{list-style:none; padding:0;}
+    .notes-list li{
+      padding:.5rem 0; border-bottom:1px solid var(--border);
+      font-size:.8rem; color:var(--mid); line-height:1.6;
+    }
+    .notes-list li:last-child{border-bottom:none;}
+    .notes-list li::before{content:'• '; color:var(--accent); font-weight:700;}
+
+    a{color:var(--accent); text-decoration:none;}
+    a:hover{text-decoration:underline;}
+
+    /* Race tables */
+    .race-table th{background:#fafafa;}
+    .race-table td{font-size:.85rem;}
+  </style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Drink <span class="slash">/</span> Gel <span class="slash">/</span> Recovery</h1>
+    <div class="tagline">Homemade endurance fuel calculator</div>
+  </header>
+
+  <div class="toggle">
+    <button class="toggle-btn active" onclick="switchTab('drink')">Drink Mix</button>
+    <button class="toggle-btn" onclick="switchTab('recovery')">Recovery</button>
+    <button class="toggle-btn" onclick="switchTab('gel')">Gel</button>
+    <button class="toggle-btn" onclick="switchTab('carb')">Carb Calc</button>
+  </div>
+
+  <!-- ========== DRINK MIX ========== -->
+  <div class="tab-panel active" id="tab-drink">
+    <div class="card">
+      <h2>Recipe</h2>
+      <table>
+        <thead>
+          <tr><th>Product</th><th>Weight (g)</th><th colspan="2">Volume (approx)</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Maltodextrin</td>
+            <td><input type="number" id="dm_malto" value="250" step="10" oninput="calcDrink()"></td>
+            <td class="computed" id="dm_malto_vol">2.0</td>
+            <td class="unit">cup</td>
+          </tr>
+          <tr>
+            <td>Fructose</td>
+            <td class="computed" id="dm_fructose_g">125</td>
+            <td class="computed" id="dm_fructose_vol">0.67</td>
+            <td class="unit">cup</td>
+          </tr>
+          <tr>
+            <td>Sodium Citrate <span class="unit">(optional)</span></td>
+            <td><input type="number" id="dm_sodium_citrate" value="5" step="1" oninput="calcDrink()"></td>
+            <td class="computed" id="dm_sc_vol">1.0</td>
+            <td class="unit">tsp</td>
+          </tr>
+          <tr>
+            <td>BCAA <span class="unit">(optional)</span></td>
+            <td><input type="number" id="dm_bcaa" value="35" step="5" oninput="calcDrink()"></td>
+            <td class="computed" id="dm_bcaa_vol">0.25</td>
+            <td class="unit">cup</td>
+          </tr>
+          <tr>
+            <td>Salt or more sodium citrate</td>
+            <td><input type="number" id="dm_salt" value="7" step="1" oninput="calcDrink()"></td>
+            <td class="computed" id="dm_salt_vol">2.0</td>
+            <td class="unit">tsp</td>
+          </tr>
+          <tr>
+            <td>Caffeine <span class="unit">(optional)*</span></td>
+            <td colspan="3" class="unit">Added per bottle (40–100 mg per serving)</td>
+          </tr>
+          <tr>
+            <td>Beta Alanine <span class="unit">(optional)*</span></td>
+            <td><input type="number" id="dm_beta" value="25" step="5" oninput="calcDrink()"></td>
+            <td></td><td></td>
+          </tr>
+          <tr>
+            <td>Citric Acid*</td>
+            <td colspan="3" class="unit">Pinch per bottle for flavor</td>
+          </tr>
+          <tr style="border-top:2px solid var(--dark);">
+            <td><strong>Sugar Total</strong></td>
+            <td class="highlight" id="dm_sugar_total">375</td>
+            <td></td><td class="unit">g</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Cost Comparison</h2>
+      <table>
+        <thead>
+          <tr><th>Ingredient</th><th>Cost</th><th>Package Size</th><th>Link</th><th>Batch Cost</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Maltodextrin</td>
+            <td>$<input type="number" id="dm_malto_cost" value="70.96" step="0.01" style="width:75px" oninput="calcDrink()"></td>
+            <td><input type="number" id="dm_malto_size" value="5000" step="100" style="width:75px" oninput="calcDrink()"> g</td>
+            <td><a href="https://a.co/d/7p6kv0z" target="_blank">Amazon</a></td>
+            <td class="computed" id="dm_malto_unit_cost">$3.55</td>
+          </tr>
+          <tr>
+            <td>Fructose</td>
+            <td>$<input type="number" id="dm_fruct_cost" value="17.06" step="0.01" style="width:75px" oninput="calcDrink()"></td>
+            <td><input type="number" id="dm_fruct_size" value="1000" step="100" style="width:75px" oninput="calcDrink()"> g</td>
+            <td><a href="https://a.co/d/3rifrNG" target="_blank">Amazon</a></td>
+            <td class="computed" id="dm_fruct_unit_cost">$2.13</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="cost-row">
+        <div class="cost-box">
+          <h3>Homemade</h3>
+          <div class="detail">Sugar cost: <span class="computed" id="dm_sugar_cost">$5.68</span></div>
+          <div class="detail">Total cost: <span class="computed" id="dm_total_cost">$5.68</span></div>
+          <div style="margin-top:.5rem; font-size:.75rem; color:var(--muted);">Cost per 80g carb:</div>
+          <div class="price good" id="dm_cost_per_80">$1.21</div>
+        </div>
+        <div class="cost-box">
+          <h3>Maurten 320</h3>
+          <div class="detail">Box: $<input type="number" id="dm_maurten_cost" value="48" step="1" style="width:65px" oninput="calcDrink()"></div>
+          <div class="detail">Units: <input type="number" id="dm_maurten_units" value="14" step="1" style="width:55px" oninput="calcDrink()"></div>
+          <div style="margin-top:.5rem; font-size:.75rem; color:var(--muted);">Cost per 80g carb:</div>
+          <div class="price bad" id="dm_maurten_per_80">$3.43</div>
+        </div>
+        <div class="cost-box">
+          <h3>Savings</h3>
+          <div style="margin-top:1.5rem;"></div>
+          <div class="price good" id="dm_savings">65%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Concentration Calculator</h2>
+      <div class="conc-row">
+        <label>Drink mix per 500 mL bottle:</label>
+        <input type="number" id="dm_scoop" value="20" step="5" style="width:70px" oninput="calcDrink()"> g
+        <span>→</span>
+        <span class="conc-out" id="dm_conc">4.0%</span>
+        <span>→</span>
+        <span class="conc-out accent" id="dm_cal">80</span> <span class="unit">cal</span>
+      </div>
+      <div class="note">
+        5% is a good all-around starting point. 3.5–4% in hot weather; up to 9% max for more calories
+        (hypertonic — needs additional water to avoid intestinal distress).
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Notes</h2>
+      <ul class="notes-list">
+        <li>Beta Alanine will make you "tingly" in the ears, forehead, etc. It enhances endurance performance — start 3 weeks before your race.</li>
+        <li>Citric acid: add a pinch to your bottle for flavor. A little goes a <em>long</em> way.</li>
+        <li>BCAA doesn't taste great; leave it out if off-putting. The benefit outweighs the taste, especially with a little citric acid.</li>
+        <li>Caffeine: 40–100 mg per serving, added per bottle (too small to mix evenly in a large batch).</li>
+        <li>Non-carb ingredients are negligible for concentration math — a 20 g scoop ≈ 4% in 500 mL.</li>
+        <li>Your body cannot absorb more than 90 g carbs/hour (60 g glucose + 30 g fructose). Don't exceed 1 L of 9% per hour.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ========== RECOVERY ========== -->
+  <div class="tab-panel" id="tab-recovery">
+    <div class="card">
+      <h2>Recovery Mix Recipe</h2>
+      <table>
+        <thead>
+          <tr><th>Product</th><th>Weight (g)</th><th colspan="2">Volume (approx)</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Maltodextrin</td>
+            <td><input type="number" id="rc_malto" value="250" step="10" oninput="calcRecovery()"></td>
+            <td class="computed" id="rc_malto_vol">2.0</td>
+            <td class="unit">cup</td>
+          </tr>
+          <tr>
+            <td>Fructose</td>
+            <td class="computed" id="rc_fructose_g">125</td>
+            <td class="computed" id="rc_fructose_vol">0.67</td>
+            <td class="unit">cup</td>
+          </tr>
+          <tr>
+            <td>Protein (whey isolate, soy, etc)</td>
+            <td class="computed" id="rc_protein_g">150</td>
+            <td></td><td></td>
+          </tr>
+          <tr>
+            <td>Potassium Chloride <span class="unit">(optional)</span></td>
+            <td><input type="number" id="rc_potassium" value="5" step="1" oninput="calcRecovery()"></td>
+            <td class="computed" id="rc_potassium_vol">1.0</td>
+            <td class="unit">tsp</td>
+          </tr>
+          <tr>
+            <td>BCAA <span class="unit">(optional)</span></td>
+            <td><input type="number" id="rc_bcaa" value="35" step="5" oninput="calcRecovery()"></td>
+            <td class="computed" id="rc_bcaa_vol">0.25</td>
+            <td class="unit">cup</td>
+          </tr>
+          <tr>
+            <td>Glutamine <span class="unit">(optional)</span></td>
+            <td><input type="number" id="rc_glutamine" value="25" step="5" oninput="calcRecovery()"></td>
+            <td></td><td></td>
+          </tr>
+          <tr>
+            <td>Salt</td>
+            <td><input type="number" id="rc_salt" value="7" step="1" oninput="calcRecovery()"></td>
+            <td class="computed" id="rc_salt_vol">2.0</td>
+            <td class="unit">tsp</td>
+          </tr>
+          <tr>
+            <td>Cocoa Powder <span class="unit">(optional)</span></td>
+            <td colspan="3" class="unit">To taste</td>
+          </tr>
+          <tr>
+            <td>Vanilla Extract <span class="unit">(optional)</span></td>
+            <td colspan="3" class="unit">To taste</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Per Scoop Breakdown</h2>
+      <div class="conc-row" style="flex-direction:column; align-items:flex-start; gap:.8rem;">
+        <div style="display:flex; align-items:center; gap:.75rem;">
+          <label style="font-size:.85rem; color:var(--mid);">Grams per scoop:</label>
+          <input type="number" id="rc_scoop" value="60" step="5" style="width:75px" oninput="calcRecovery()"> g
+        </div>
+      </div>
+      <div class="results-row" style="margin-top:1rem;">
+        <div class="result-box">
+          <div class="result-label">Protein per scoop</div>
+          <div class="result-value green" id="rc_protein_scoop">15.1</div>
+          <div class="result-unit">grams</div>
+        </div>
+        <div class="result-box">
+          <div class="result-label">Carbs per scoop</div>
+          <div class="result-value blue" id="rc_carbs_scoop">37.7</div>
+          <div class="result-unit">grams</div>
+        </div>
+        <div class="result-box">
+          <div class="result-label">Carb : Protein</div>
+          <div class="result-value accent" id="rc_ratio">2.5:1</div>
+          <div class="result-unit">ratio</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== GEL ========== -->
+  <div class="tab-panel" id="tab-gel">
+    <div class="card">
+      <h2>Homemade Gel</h2>
+      <ul class="notes-list">
+        <li><strong>Same formula as the Drink Mix</strong> — just use much less water.</li>
+        <li>Add a little bit of warm water at a time; usually half the amount of water to the amount of powder used.</li>
+        <li>E.g., if using ½ cup of drink mix, start with a little less than ¼ cup of water and keep adding small bits until you get the consistency you like.</li>
+        <li>It's amazing how much drink mix you can dissolve into a small amount of water…</li>
+        <li>These <a href="https://www.amazon.com/gp/product/B08ZMY8X81/" target="_blank">reusable dispensers</a> are great for carrying your gels.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ========== CARB CALCULATOR ========== -->
+  <div class="tab-panel" id="tab-carb">
+    <div class="card">
+      <h2>Training Nutrition</h2>
+      <table class="race-table">
+        <thead>
+          <tr><th></th><th>Speed (&lt;90 min)</th><th>Endurance (Z2 &amp; below)</th><th>Race</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Before</strong></td>
+            <td>30–50 g carbs</td>
+            <td>Protein &amp; fat (omelette, nut butters, meats, seeds, nuts)</td>
+            <td>Base carbs + more right before</td>
+          </tr>
+          <tr>
+            <td><strong>During</strong></td>
+            <td>Fluid — 500 mL/hr</td>
+            <td>Same + added cal for &gt;90 min</td>
+            <td>See race plans below</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Race — 70.3 (Half Ironman)</h2>
+      <table class="race-table">
+        <thead>
+          <tr><th></th><th>Swim</th><th>Bike</th><th>Run</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Before</strong></td>
+            <td colspan="3">4 hrs before start + first serving 15 min before start</td>
+          </tr>
+          <tr>
+            <td><strong>During</strong></td>
+            <td>17–27 min intervals</td>
+            <td class="highlight">900 cal</td>
+            <td class="highlight">350 cal (liquid/gel)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Race — Full Ironman</h2>
+      <table class="race-table">
+        <thead>
+          <tr><th></th><th>Swim</th><th>Bike</th><th>Run</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Before</strong></td>
+            <td colspan="3">4 hrs before start</td>
+          </tr>
+          <tr>
+            <td><strong>During</strong></td>
+            <td>17–27 min intervals</td>
+            <td class="highlight">1800 cal</td>
+            <td class="highlight">600 cal (liquid/gel)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>General Guidelines</h2>
+      <ul class="notes-list">
+        <li>Consume approximately one large bottle of fluids each hour during exercise — a light electrolyte drink with 10–40 calories per bottle.</li>
+        <li>Stick to liquid calories (gels are fine) during run training and running races.</li>
+        <li>Calories can be liquid or solid (chews, bars, real food) during cycling or swimming events.</li>
+        <li>Space out your target calories into 18–30 minute intervals.</li>
+        <li>No need to consume calories for workouts of 75 minutes or less.</li>
+      </ul>
+      <div class="note">
+        <a href="https://mymottiv.com/nutrition-calculator-for-running-cycling-swimming-and-triathlon/" target="_blank">Mottiv Nutrition Calculator →</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== Tab switching =====
+  function switchTab(name) {
+    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    const map = {drink:0, recovery:1, gel:2, carb:3};
+    document.querySelectorAll('.toggle-btn')[map[name]].classList.add('active');
+  }
+
+  // ===== Helpers =====
+  function v(id) { return parseFloat(document.getElementById(id).value) || 0; }
+  function $(id) { return document.getElementById(id); }
+  function fmt$(n) { return '$' + n.toFixed(2); }
+
+  // ===== Drink Mix =====
+  function calcDrink() {
+    const malto = v('dm_malto');
+    const cups = malto / 125;
+    const fructose = malto / 2;
+    const sugarTotal = malto + fructose;
+
+    $('dm_malto_vol').textContent = cups.toFixed(1);
+    $('dm_fructose_g').textContent = fructose.toFixed(0);
+    $('dm_fructose_vol').textContent = (cups / 3).toFixed(2);
+    $('dm_sc_vol').textContent = (cups / 2).toFixed(1);
+    $('dm_bcaa_vol').textContent = (cups / 8).toFixed(2);
+    $('dm_salt_vol').textContent = cups.toFixed(1);
+    $('dm_sugar_total').textContent = sugarTotal.toFixed(0);
+
+    const maltoUnitCost = v('dm_malto_cost') / (v('dm_malto_size') / malto);
+    const fructUnitCost = v('dm_fruct_cost') / (v('dm_fruct_size') / fructose);
+    const sugarCost = maltoUnitCost + fructUnitCost;
+
+    $('dm_malto_unit_cost').textContent = fmt$(maltoUnitCost);
+    $('dm_fruct_unit_cost').textContent = fmt$(fructUnitCost);
+    $('dm_sugar_cost').textContent = fmt$(sugarCost);
+    $('dm_total_cost').textContent = fmt$(sugarCost);
+
+    const costPer80 = sugarCost / (sugarTotal / 80);
+    $('dm_cost_per_80').textContent = fmt$(costPer80);
+
+    const maurtenPer80 = v('dm_maurten_units') > 0
+      ? v('dm_maurten_cost') / v('dm_maurten_units') : 0;
+    $('dm_maurten_per_80').textContent = fmt$(maurtenPer80);
+
+    const savings = maurtenPer80 > 0
+      ? ((maurtenPer80 - costPer80) / maurtenPer80 * 100) : 0;
+    $('dm_savings').textContent = savings.toFixed(0) + '%';
+
+    const scoop = v('dm_scoop');
+    $('dm_conc').textContent = (scoop / 500 * 100).toFixed(1) + '%';
+    $('dm_cal').textContent = (scoop * 4).toFixed(0);
+  }
+
+  // ===== Recovery =====
+  function calcRecovery() {
+    const malto = v('rc_malto');
+    const cups = malto / 125;
+    const fructose = malto / 2;
+    const protein = (malto + fructose) / 2.5;
+
+    $('rc_malto_vol').textContent = cups.toFixed(1);
+    $('rc_fructose_g').textContent = fructose.toFixed(0);
+    $('rc_fructose_vol').textContent = (cups / 3).toFixed(2);
+    $('rc_protein_g').textContent = protein.toFixed(0);
+    $('rc_potassium_vol').textContent = (cups / 2).toFixed(1);
+    $('rc_bcaa_vol').textContent = (cups / 8).toFixed(2);
+    $('rc_salt_vol').textContent = cups.toFixed(1);
+
+    const totalMix = malto + fructose + protein
+      + v('rc_potassium') + v('rc_bcaa') + v('rc_glutamine') + v('rc_salt');
+    const scoop = v('rc_scoop');
+    const protPerScoop = totalMix > 0 ? (protein / totalMix) * scoop : 0;
+    const carbsPerScoop = totalMix > 0 ? ((malto + fructose) / totalMix) * scoop : 0;
+    const ratio = protPerScoop > 0 ? carbsPerScoop / protPerScoop : 0;
+
+    $('rc_protein_scoop').textContent = protPerScoop.toFixed(1);
+    $('rc_carbs_scoop').textContent = carbsPerScoop.toFixed(1);
+    $('rc_ratio').textContent = ratio.toFixed(1) + ':1';
+  }
+
+  calcDrink();
+  calcRecovery();
+</script>
+<script src="/footer.js"></script>
+</body>
+</html>

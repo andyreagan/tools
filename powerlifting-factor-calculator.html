@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Powerlifting Factor Calculator — Andy's Toolbox</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+      --mid:#666; --muted:#999; --border:#ddd; --accent:#e74c3c;
+      --green:#27ae60; --gold:#d4a017;
+    }
+    body{
+      font-family:system-ui,sans-serif;
+      background:var(--bg); color:var(--dark);
+      min-height:100vh; display:flex; flex-direction:column;
+      align-items:center; padding:2rem 1rem;
+    }
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0;
+      background-image:repeating-linear-gradient(
+        45deg, transparent, transparent 20px,
+        rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+      );
+    }
+    .page{position:relative;z-index:1;width:min(800px,100%);margin:auto 0;}
+
+    header{margin-bottom:2rem; text-align:center;}
+    h1{
+      font-weight:700;
+      font-size:clamp(1.8rem,6vw,3rem); text-transform:uppercase;
+      letter-spacing:.04em; line-height:1;
+    }
+    .tagline{
+      font-size:.8rem; color:var(--muted); letter-spacing:.1em;
+      text-transform:uppercase; margin-top:.4rem;
+    }
+    h2{
+      font-size:.9rem; font-weight:700; text-transform:uppercase;
+      letter-spacing:.1em; color:var(--muted); margin-bottom:1rem;
+      padding-bottom:.5rem; border-bottom:1px solid var(--border);
+    }
+
+    .card{
+      background:var(--surface); border:2px solid var(--dark);
+      border-radius:4px; padding:1.5rem 2rem; margin-bottom:1rem;
+    }
+
+    /* Field labels */
+    .field-label{
+      font-size:.75rem; font-weight:600; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted); margin-bottom:.4rem;
+    }
+
+    /* Inputs */
+    input[type=number]{
+      font-family:system-ui,sans-serif;
+      font-size:1rem; padding:.4rem .6rem;
+      border:2px solid var(--border); border-radius:3px;
+      background:#fafafa; color:var(--dark);
+      text-align:center; width:80px;
+      transition:border-color .15s;
+    }
+    input[type=number]:focus{outline:none; border-color:var(--dark);}
+
+    /* Bodyweight row */
+    .bw-row{display:flex; align-items:center; gap:1rem;}
+    .bw-row input{width:120px; font-size:1.2rem;}
+    .bw-unit{font-size:.85rem; color:var(--muted);}
+
+    /* Table */
+    table{width:100%; border-collapse:collapse;}
+    th,td{padding:.5rem .4rem; text-align:center; font-size:.85rem;}
+    th{
+      font-size:.65rem; font-weight:600; letter-spacing:.1em;
+      text-transform:uppercase; color:var(--muted);
+    }
+    thead tr:first-child th{
+      padding-bottom:.2rem; font-size:.6rem; color:var(--mid);
+    }
+    tbody td{border-bottom:1px solid var(--border);}
+    tbody td:first-child{
+      text-align:left; font-weight:700; font-size:.9rem;
+      color:var(--dark); letter-spacing:.03em;
+    }
+    .est{color:var(--mid); font-weight:500;}
+    .best{color:var(--accent); font-weight:700; font-size:.95rem;}
+
+    /* Section header in table */
+    .section-hdr{
+      background:#fafafa; font-size:.6rem; font-weight:700;
+      letter-spacing:.15em; text-transform:uppercase; color:var(--mid);
+      padding:.4rem;
+    }
+
+    /* Results */
+    .results-row{
+      display:flex; gap:1.5rem; justify-content:center;
+      flex-wrap:wrap;
+    }
+    .result-box{
+      text-align:center; padding:1.25rem 2rem;
+      border:2px solid var(--dark); border-radius:4px;
+      background:#fafafa; min-width:180px;
+    }
+    .result-label{
+      font-size:.65rem; font-weight:600; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted); margin-bottom:.25rem;
+    }
+    .result-value{
+      font-weight:700; font-size:2.5rem; line-height:1;
+      color:var(--dark);
+    }
+    .result-value.accent{color:var(--accent);}
+    .result-unit{font-size:.85rem; font-weight:400; color:var(--muted);}
+
+    /* Reference table */
+    .ref-table{max-width:260px; margin:0 auto;}
+    .ref-table td{
+      padding:.3rem .8rem; text-align:center;
+      font-weight:500; color:var(--mid);
+    }
+
+    .note{
+      margin-top:1rem; font-size:.72rem; color:var(--muted);
+      line-height:1.6; border-left:3px solid var(--border);
+      padding-left:.75rem;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Powerlifting Factor</h1>
+    <div class="tagline">Estimate 1RM &amp; strength-to-bodyweight ratio</div>
+  </header>
+
+  <div class="card">
+    <h2>Bodyweight</h2>
+    <div class="bw-row">
+      <div class="field-label">Weight</div>
+      <input type="number" id="bodyweight" value="182" step="0.1" oninput="calculate()">
+      <span class="bw-unit">lbs</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Max Calculator</h2>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th colspan="4" class="section-hdr">Weight Lifted @ Reps</th>
+            <th colspan="4" class="section-hdr">Estimated 1RM</th>
+            <th></th>
+          </tr>
+          <tr>
+            <th>Lift</th>
+            <th>8 rep</th>
+            <th>5 rep</th>
+            <th>3 rep</th>
+            <th>1 rep</th>
+            <th>from 8</th>
+            <th>from 5</th>
+            <th>from 3</th>
+            <th>from 1</th>
+            <th>Best</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Bench</td>
+            <td><input type="number" id="bench8" value="115" oninput="calculate()"></td>
+            <td><input type="number" id="bench5" value="145" oninput="calculate()"></td>
+            <td><input type="number" id="bench3" value="150" oninput="calculate()"></td>
+            <td><input type="number" id="bench1" value="" oninput="calculate()"></td>
+            <td class="est" id="bench_est8">—</td>
+            <td class="est" id="bench_est5">—</td>
+            <td class="est" id="bench_est3">—</td>
+            <td class="est" id="bench_est1">—</td>
+            <td class="best" id="bench_best">—</td>
+          </tr>
+          <tr>
+            <td>Squat</td>
+            <td><input type="number" id="squat8" value="135" oninput="calculate()"></td>
+            <td><input type="number" id="squat5" value="205" oninput="calculate()"></td>
+            <td><input type="number" id="squat3" value="" oninput="calculate()"></td>
+            <td><input type="number" id="squat1" value="225" oninput="calculate()"></td>
+            <td class="est" id="squat_est8">—</td>
+            <td class="est" id="squat_est5">—</td>
+            <td class="est" id="squat_est3">—</td>
+            <td class="est" id="squat_est1">—</td>
+            <td class="best" id="squat_best">—</td>
+          </tr>
+          <tr>
+            <td>Deadlift</td>
+            <td><input type="number" id="dl8" value="225" oninput="calculate()"></td>
+            <td><input type="number" id="dl5" value="275" oninput="calculate()"></td>
+            <td><input type="number" id="dl3" value="" oninput="calculate()"></td>
+            <td><input type="number" id="dl1" value="300" oninput="calculate()"></td>
+            <td class="est" id="dl_est8">—</td>
+            <td class="est" id="dl_est5">—</td>
+            <td class="est" id="dl_est3">—</td>
+            <td class="est" id="dl_est1">—</td>
+            <td class="best" id="dl_best">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      Enter the weight lifted at each rep count. Leave blank if not tested.<br>
+      Estimated 1RM = weight ÷ (% of 1RM for that rep count).
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Results</h2>
+    <div class="results-row">
+      <div class="result-box">
+        <div class="result-label">Total (best 1RMs)</div>
+        <div class="result-value" id="total">—</div>
+        <div class="result-unit">lbs</div>
+      </div>
+      <div class="result-box">
+        <div class="result-label">Lifting Factor</div>
+        <div class="result-value accent" id="factor">—</div>
+        <div class="result-unit">total ÷ bodyweight</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>1RM % Reference</h2>
+    <table class="ref-table">
+      <thead>
+        <tr><th>Reps</th><th>% of 1RM</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>100%</td></tr>
+        <tr><td>2</td><td>97%</td></tr>
+        <tr><td>3</td><td>94%</td></tr>
+        <tr><td>4</td><td>92%</td></tr>
+        <tr><td>5</td><td>89%</td></tr>
+        <tr><td>6</td><td>86%</td></tr>
+        <tr><td>7</td><td>83%</td></tr>
+        <tr><td>8</td><td>81%</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const pct1RM = {1:1.00, 2:0.97, 3:0.94, 4:0.92, 5:0.89, 6:0.86, 7:0.83, 8:0.81};
+
+  function est1RM(weight, reps) {
+    if (!weight || weight <= 0 || !pct1RM[reps]) return null;
+    return weight / pct1RM[reps];
+  }
+
+  function v(id) {
+    const n = parseFloat(document.getElementById(id).value);
+    return isNaN(n) ? null : n;
+  }
+
+  function fmt(n) {
+    return n === null ? '—' : n.toFixed(1);
+  }
+
+  function calculate() {
+    const bw = v('bodyweight') || 0;
+    const lifts = ['bench','squat','dl'];
+    const reps = [8,5,3,1];
+    let total = 0;
+
+    lifts.forEach(lift => {
+      let best = 0;
+      reps.forEach(r => {
+        const w = v(lift + r);
+        const e = est1RM(w, r);
+        document.getElementById(`${lift}_est${r}`).textContent = fmt(e);
+        if (e !== null && e > best) best = e;
+      });
+      document.getElementById(`${lift}_best`).textContent = best > 0 ? fmt(best) : '—';
+      total += best;
+    });
+
+    document.getElementById('total').textContent = total > 0 ? fmt(total) : '—';
+    document.getElementById('factor').textContent =
+      (total > 0 && bw > 0) ? (total / bw).toFixed(2) : '—';
+  }
+
+  calculate();
+</script>
+<script src="/footer.js"></script>
+</body>
+</html>
