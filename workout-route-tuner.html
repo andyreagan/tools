@@ -1,0 +1,2993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Workout Route Tuner — Andy's Toolbox</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+      --mid:#666; --muted:#999; --border:#ddd; --accent:#e74c3c;
+      --z1:#4caf50; --z2:#8bc34a; --z3:#ffc107; --z4:#ff9800;
+      --z5:#f44336; --z6:#9c27b0; --z7:#e91e63;
+      --recovery:#4caf50; --endurance:#8bc34a; --tempo:#ffc107;
+      --threshold:#ff9800; --vo2max:#f44336; --anaerobic:#9c27b0;
+      --sprint:#e91e63;
+      --stop-color:#e74c3c; --caution-color:#ff9800;
+    }
+    body{
+      font-family:system-ui,sans-serif;
+      background:var(--bg); color:var(--dark);
+      min-height:100vh; padding:1.5rem;
+    }
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0;
+      background-image:repeating-linear-gradient(
+        45deg, transparent, transparent 20px,
+        rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+      );
+    }
+    .page{max-width:1200px; margin:0 auto; position:relative; z-index:1;}
+
+    header{margin-bottom:2rem;}
+    .back{
+      font-size:.75rem; font-weight:600; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted);
+      text-decoration:none; display:inline-block; margin-bottom:1rem;
+    }
+    .back:hover{color:var(--accent);}
+    h1{
+      font-size:clamp(1.6rem,5vw,2.5rem); font-weight:800;
+      text-transform:uppercase; letter-spacing:.02em; line-height:1.1;
+      margin-bottom:.5rem;
+    }
+    .subtitle{font-size:.9rem; color:var(--mid); line-height:1.6; max-width:700px;}
+
+    .card{
+      background:var(--surface); border:2px solid var(--dark);
+      border-radius:4px; padding:1.5rem; margin-bottom:1.5rem;
+    }
+    .card h2{
+      font-size:.75rem; font-weight:700; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted); margin-bottom:1rem;
+    }
+    .card h3{
+      font-size:.85rem; font-weight:700; margin-bottom:.75rem;
+    }
+
+    /* Inputs */
+    input, select, textarea{
+      font-size:.9rem; padding:.4rem .6rem;
+      border:2px solid var(--border); border-radius:3px;
+      background:#fafafa; color:var(--dark); font-family:system-ui,sans-serif;
+    }
+    input:focus, select:focus, textarea:focus{
+      outline:none; border-color:var(--dark);
+    }
+    label{
+      font-size:.75rem; font-weight:600; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--muted); display:block;
+      margin-bottom:.3rem;
+    }
+
+    /* Buttons */
+    .btn{
+      font-size:.8rem; font-weight:600; letter-spacing:.05em;
+      text-transform:uppercase; padding:.5rem 1rem;
+      border:2px solid var(--dark); border-radius:3px;
+      background:transparent; color:var(--dark); cursor:pointer;
+      transition:all .15s;
+    }
+    .btn:hover{background:var(--dark); color:#fff;}
+    .btn.active{background:var(--dark); color:#fff;}
+    .btn.small{font-size:.7rem; padding:.35rem .7rem;}
+    .btn.danger{border-color:var(--accent); color:var(--accent);}
+    .btn.danger:hover{background:var(--accent); color:#fff;}
+    .btn:disabled{opacity:.4; cursor:not-allowed;}
+    .btn:disabled:hover{background:transparent; color:var(--dark);}
+
+    .btn-row{display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:1rem;}
+
+    /* Layout */
+    .two-col{display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;}
+    @media(max-width:800px){.two-col{grid-template-columns:1fr;}}
+
+    .three-col{display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem;}
+    @media(max-width:600px){.three-col{grid-template-columns:1fr;}}
+
+    /* Map */
+    #map{height:350px; border-radius:3px; border:1px solid var(--border); margin-bottom:1rem;}
+
+    /* Elevation chart */
+    .chart-container{position:relative; height:200px; margin-bottom:1rem;}
+    .chart-container canvas{width:100%!important; height:100%!important;}
+
+    /* Route info */
+    .route-stats{
+      display:flex; gap:1.5rem; flex-wrap:wrap; margin-bottom:1rem;
+    }
+    .stat{display:flex; flex-direction:column;}
+    .stat-label{font-size:.65rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);}
+    .stat-value{font-size:1.2rem; font-weight:700;}
+
+    /* Workout builder */
+    .workout-intervals{margin-bottom:1rem;}
+    .interval-row{
+      display:grid;
+      grid-template-columns:40px 120px 80px 80px 80px 100px 1fr 40px;
+      gap:.4rem; align-items:center;
+      padding:.5rem; border-bottom:1px solid var(--border);
+      font-size:.82rem;
+    }
+    .interval-row.header{
+      font-weight:600; font-size:.65rem; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--muted);
+      border-bottom:2px solid var(--border);
+    }
+    .interval-row input, .interval-row select{
+      font-size:.82rem; padding:.25rem .4rem;
+    }
+    .interval-color{
+      width:24px; height:24px; border-radius:3px;
+      border:1px solid var(--border);
+    }
+    .remove-btn{
+      width:24px; height:24px; border:none; background:none;
+      color:var(--muted); cursor:pointer; font-size:1rem;
+      display:flex; align-items:center; justify-content:center;
+      border-radius:3px;
+    }
+    .remove-btn:hover{background:#fee; color:var(--accent);}
+
+    @media(max-width:800px){
+      .interval-row{
+        grid-template-columns:30px 1fr 1fr 1fr;
+        gap:.3rem;
+      }
+      .interval-row.header .hide-mobile,
+      .interval-row .hide-mobile{display:none;}
+    }
+
+    /* Stop markers */
+    .stop-list{max-height:200px; overflow-y:auto;}
+    .stop-item{
+      display:flex; align-items:center; gap:.75rem;
+      padding:.4rem 0; border-bottom:1px solid var(--border);
+      font-size:.82rem;
+    }
+    .stop-dot{
+      width:10px; height:10px; border-radius:50%; flex-shrink:0;
+    }
+    .stop-dot.stop{background:var(--stop-color);}
+    .stop-dot.caution{background:var(--caution-color);}
+    .stop-dot.turnaround{background:#2196f3;}
+
+    /* Workout overlay chart */
+    #workoutChart{height:280px;}
+
+    /* Turnaround editor */
+    .turnaround-info{
+      font-size:.82rem; color:var(--mid); line-height:1.6;
+      padding:.75rem; background:#fafafa; border-radius:3px;
+      margin-bottom:1rem;
+    }
+
+    /* Conflict warnings */
+    .warning{
+      background:#fff3cd; border:1px solid #ffc107; border-radius:3px;
+      padding:.5rem .75rem; font-size:.82rem; color:#856404;
+      margin-bottom:.75rem; display:flex; align-items:center; gap:.5rem;
+    }
+    .warning::before{content:'⚠️';}
+
+    /* Export */
+    .export-preview{
+      background:#fafafa; border:1px solid var(--border); border-radius:3px;
+      padding:1rem; font-family:'SF Mono',Monaco,Consolas,monospace;
+      font-size:.75rem; line-height:1.6; max-height:300px;
+      overflow-y:auto; white-space:pre; margin-bottom:1rem;
+    }
+
+    /* Gear analysis */
+    .gear-table{
+      width:100%; border-collapse:collapse; font-size:.8rem;
+    }
+    .gear-table th{
+      font-weight:600; font-size:.65rem; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--muted);
+      text-align:left; padding:.4rem .5rem;
+      border-bottom:2px solid var(--border);
+    }
+    .gear-table td{
+      padding:.4rem .5rem; border-bottom:1px solid var(--border);
+    }
+    .gear-table .warn{color:var(--accent); font-weight:600;}
+
+    /* File drop zone */
+    .drop-zone{
+      border:2px dashed var(--border); border-radius:4px;
+      padding:2rem; text-align:center; cursor:pointer;
+      transition:all .2s; margin-bottom:1rem;
+    }
+    .drop-zone:hover, .drop-zone.dragover{
+      border-color:var(--dark); background:#fafafa;
+    }
+    .drop-zone p{font-size:.85rem; color:var(--mid);}
+    .drop-zone .hint{font-size:.7rem; color:var(--muted); margin-top:.3rem;}
+    .drop-zone input[type="file"]{display:none;}
+
+    /* Tabs */
+    .tabs{display:flex; gap:0; margin-bottom:1rem; border-bottom:2px solid var(--border);}
+    .tab{
+      padding:.5rem 1rem; font-size:.75rem; font-weight:600;
+      letter-spacing:.08em; text-transform:uppercase;
+      color:var(--muted); cursor:pointer; border:none; background:none;
+      border-bottom:2px solid transparent; margin-bottom:-2px;
+      transition:all .15s;
+    }
+    .tab:hover{color:var(--dark);}
+    .tab.active{color:var(--dark); border-bottom-color:var(--dark);}
+    .tab-panel{display:none;}
+    .tab-panel.active{display:block;}
+
+    /* Segment grade coloring */
+    .grade-easy{color:var(--z1);}
+    .grade-mod{color:var(--z3);}
+    .grade-hard{color:var(--z5);}
+    .grade-extreme{color:var(--z6);}
+
+    /* Inline form groups */
+    .form-group{margin-bottom:.75rem;}
+    .form-row{display:flex; gap:.75rem; align-items:end; flex-wrap:wrap;}
+    .form-row .form-group{margin-bottom:0;}
+
+    /* Draggable handle */
+    .drag-handle{
+      cursor:grab; color:var(--muted); user-select:none;
+      font-size:.85rem;
+    }
+    .drag-handle:active{cursor:grabbing;}
+
+    /* Speed info */
+    .speed-note{
+      font-size:.72rem; color:var(--muted); line-height:1.5;
+      border-left:3px solid var(--border); padding-left:.75rem;
+      margin-top:1rem;
+    }
+
+    /* Responsive overrides for interval builder on small screens */
+    @media(max-width:900px){
+      .interval-row{
+        grid-template-columns:30px 100px 70px 70px 70px 80px 1fr 30px;
+      }
+    }
+
+    /* Step indicator */
+    .step-indicator{
+      display:flex; gap:.25rem; align-items:center;
+      margin-bottom:1.5rem;
+    }
+    .step{
+      display:flex; align-items:center; gap:.4rem;
+      font-size:.7rem; font-weight:600; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--muted);
+      padding:.3rem .6rem; border-radius:3px;
+    }
+    .step.done{color:var(--z1);}
+    .step.current{color:var(--dark); background:#f5f3ef;}
+    .step-num{
+      width:20px; height:20px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-size:.65rem; border:2px solid var(--border);
+      color:var(--muted);
+    }
+    .step.done .step-num{border-color:var(--z1); color:var(--z1);}
+    .step.current .step-num{border-color:var(--dark); color:var(--dark); background:var(--dark); color:#fff;}
+    .step:hover{color:var(--dark);}
+    .step:hover .step-num{border-color:var(--dark);}
+    .step-arrow{color:var(--border); font-size:.7rem;}
+
+    /* Leaflet custom markers */
+    .stop-marker{
+      background:var(--stop-color); border:2px solid #fff;
+      border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,.3);
+    }
+    .caution-marker{
+      background:var(--caution-color); border:2px solid #fff;
+      border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,.3);
+    }
+    .turnaround-marker{
+      background:#2196f3; border:2px solid #fff;
+      border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,.3);
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <a class="back" href="/">← Back to Toolbox</a>
+    <h1>Workout Route Tuner</h1>
+    <p class="subtitle">
+      Fit structured workouts to real-world routes. Account for stop signs, hills, gear limits,
+      and intersections. Adjust intervals to avoid conflicts, add turnarounds for hill repeats,
+      and export the tuned workout.
+    </p>
+  </header>
+
+  <!-- Step Indicator — clickable to navigate -->
+  <div class="step-indicator" id="stepIndicator">
+    <div class="step current" data-step="1" onclick="goToStep(1)" style="cursor:pointer"><span class="step-num">1</span> Route</div>
+    <span class="step-arrow">→</span>
+    <div class="step" data-step="2" onclick="goToStep(2)" style="cursor:pointer"><span class="step-num">2</span> Setup</div>
+    <span class="step-arrow">→</span>
+    <div class="step" data-step="3" onclick="goToStep(3)" style="cursor:pointer"><span class="step-num">3</span> Workout</div>
+    <span class="step-arrow">→</span>
+    <div class="step" data-step="4" onclick="goToStep(4)" style="cursor:pointer"><span class="step-num">4</span> Tune</div>
+    <span class="step-arrow">→</span>
+    <div class="step" data-step="5" onclick="goToStep(5)" style="cursor:pointer"><span class="step-num">5</span> Export</div>
+  </div>
+
+  <!-- ============ STEP 1: Load Route ============ -->
+  <div id="step1Panel">
+    <div class="card">
+      <h2>1. Load a Route</h2>
+      <div class="drop-zone" id="routeDropZone">
+        <p>Drop a <strong>.gpx</strong> or <strong>.json</strong> (annotated route) file here</p>
+        <div class="hint">GPX route or activity files. Or load a previously saved annotated route (.json) to skip re-annotating.</div>
+        <input type="file" id="routeFileInput" accept=".gpx,.json">
+      </div>
+      <div class="btn-row">
+        <button class="btn small" onclick="loadDemoRoute()">Load demo route</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ STEP 2: Route Analysis + Rider Setup ============ -->
+  <div id="step2Panel" style="display:none">
+
+    <!-- Card A: Route + Annotations (compact — keep map and buttons visible together) -->
+    <div class="card">
+      <h2>2a. Route &amp; Annotations</h2>
+
+      <!-- Route stats -->
+      <div class="route-stats" id="routeStats"></div>
+
+      <!-- Annotation toolbar — sticky so it stays visible while scrolling map -->
+      <div id="annotToolbar" style="position:sticky; top:0; z-index:10; background:var(--surface); padding:.5rem 0; border-bottom:1px solid var(--border); margin-bottom:.75rem;">
+        <div class="btn-row" style="margin-bottom:.4rem;">
+          <button class="btn small" id="addStopBtn" onclick="setAnnotationMode('stop')">🛑 Add stop</button>
+          <button class="btn small" id="addCautionBtn" onclick="setAnnotationMode('caution')">⚠️ Add caution</button>
+          <button class="btn small" id="addTurnaroundBtn" onclick="setAnnotationMode('turnaround')">🔄 Add turnaround</button>
+          <button class="btn small" id="cancelAnnotBtn" onclick="setAnnotationMode(null)" style="display:none">✕ Cancel</button>
+          <span style="border-left:1px solid var(--border); margin:0 .25rem;"></span>
+          <button class="btn small" onclick="autoDetectStops()">⚡ Auto-detect stops</button>
+        </div>
+        <div id="annotModeHint" style="display:none; font-size:.75rem; color:var(--accent); font-weight:600;">
+          ← Click on the map or elevation chart to place marker
+        </div>
+      </div>
+
+      <!-- Map -->
+      <div id="map"></div>
+
+      <!-- Elevation profile -->
+      <div class="chart-container">
+        <canvas id="elevationChart"></canvas>
+      </div>
+
+      <!-- Auto-detect settings (collapsed by default) -->
+      <details id="autoDetectDetails" style="margin-bottom:.75rem;">
+        <summary style="font-size:.8rem; font-weight:600; color:var(--mid); cursor:pointer; margin-bottom:.5rem;">
+          Auto-detect settings
+        </summary>
+        <div class="form-row" style="margin-top:.5rem;">
+          <div class="form-group">
+            <label>Speed threshold (km/h)</label>
+            <input type="number" id="stopSpeedThreshold" value="5" min="0" max="20" step="0.5" style="width:80px;">
+            <div style="font-size:.65rem; color:var(--muted); margin-top:.15rem;">Points below this speed → stop</div>
+          </div>
+          <div class="form-group">
+            <label>Min gap between stops (m)</label>
+            <input type="number" id="stopMinGap" value="200" min="50" max="2000" step="50" style="width:90px;">
+            <div style="font-size:.65rem; color:var(--muted); margin-top:.15rem;">Merge nearby stops</div>
+          </div>
+          <div class="form-group" style="align-self:end;">
+            <button class="btn small" onclick="autoDetectStops()">Re-detect</button>
+            <button class="btn small danger" onclick="clearAnnotations()">Clear all</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- Stop list -->
+      <div class="stop-list" id="stopList"></div>
+
+      <hr style="border:none; border-top:1px solid var(--border); margin:1rem 0;">
+      <div class="btn-row">
+        <button class="btn small" onclick="saveAnnotatedRoute()">💾 Save annotated route</button>
+        <button class="btn small" onclick="document.getElementById('loadAnnotInput').click()">📂 Load annotated route</button>
+        <input type="file" id="loadAnnotInput" accept=".json" style="display:none" onchange="loadAnnotatedRoute(this)">
+      </div>
+    </div>
+
+    <!-- Card B: Rider & Bike config -->
+    <div class="card">
+      <h2>2b. Rider &amp; Bike</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <label>FTP (watts)</label>
+          <input type="number" id="ftpInput" value="250" min="50" max="500" style="width:90px;">
+        </div>
+        <div class="form-group">
+          <label>Weight (kg)</label>
+          <input type="number" id="weightInput" value="75" min="30" max="200" style="width:90px;">
+        </div>
+        <div class="form-group">
+          <label>Bike (kg)</label>
+          <input type="number" id="bikeWeightInput" value="9" min="3" max="25" step="0.5" style="width:80px;">
+        </div>
+        <div class="form-group">
+          <label>CdA (m²)</label>
+          <input type="number" id="cdaInput" value="0.32" min="0.15" max="0.6" step="0.01" style="width:80px;">
+        </div>
+        <div class="form-group">
+          <label>Crr</label>
+          <input type="number" id="crrInput" value="0.005" min="0.001" max="0.02" step="0.001" style="width:80px;">
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-top:.75rem;">
+        <div class="form-group">
+          <label>Wind speed (km/h)</label>
+          <input type="number" id="windSpeedInput" value="0" min="0" max="80" step="1" style="width:80px;">
+        </div>
+        <div class="form-group">
+          <label>Wind from (°)</label>
+          <input type="number" id="windDirInput" value="0" min="0" max="359" step="1" style="width:80px;">
+          <div style="font-size:.65rem; color:var(--muted); margin-top:.15rem;">0=N, 90=E, 180=S, 270=W</div>
+        </div>
+        <div class="form-group" style="align-self:end;">
+          <a href="riding-physics-estimator.html" class="btn small" style="text-decoration:none; display:inline-block;">📐 Calibrate CdA/Crr from a ride →</a>
+        </div>
+      </div>
+
+      <details style="margin-top:.75rem;">
+        <summary style="font-size:.8rem; font-weight:600; color:var(--mid); cursor:pointer;">
+          Gearing (optional)
+        </summary>
+        <div class="form-row" style="margin-top:.5rem;">
+          <div class="form-group">
+            <label>Min cadence (RPM)</label>
+            <input type="number" id="minCadenceInput" value="60" min="30" max="100" style="width:80px;">
+          </div>
+          <div class="form-group">
+            <label>Max cadence (RPM)</label>
+            <input type="number" id="maxCadenceInput" value="110" min="80" max="150" style="width:80px;">
+          </div>
+          <div class="form-group">
+            <label>Max gear ratio</label>
+            <input type="number" id="maxGearInput" value="2.88" min="1" max="5" step="0.01" style="width:80px;">
+            <div style="font-size:.65rem; color:var(--muted); margin-top:.15rem;">e.g. 50/17 = 2.94</div>
+          </div>
+          <div class="form-group">
+            <label>Min gear ratio</label>
+            <input type="number" id="minGearInput" value="1.0" min="0.5" max="3" step="0.01" style="width:80px;">
+            <div style="font-size:.65rem; color:var(--muted); margin-top:.15rem;">e.g. 34/34 = 1.0</div>
+          </div>
+          <div class="form-group">
+            <label>Wheel circ (mm)</label>
+            <input type="number" id="wheelCircInput" value="2105" min="1800" max="2300" style="width:90px;">
+            <div style="font-size:.65rem; color:var(--muted); margin-top:.15rem;">700×25c ≈ 2105</div>
+          </div>
+        </div>
+      </details>
+
+      <div style="margin-top:1rem;">
+        <button class="btn" onclick="goToStep(3)">Continue to Workout →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ STEP 3: Build Workout ============ -->
+  <div id="step3Panel" style="display:none">
+    <div class="card">
+      <h2>3. Build Workout</h2>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="build" onclick="setWorkoutTab('build')">Build</button>
+        <button class="tab" data-tab="import" onclick="setWorkoutTab('import')">Import</button>
+        <button class="tab" data-tab="templates" onclick="setWorkoutTab('templates')">Templates</button>
+      </div>
+
+      <!-- BUILD -->
+      <div class="tab-panel active" id="tabBuild">
+        <div class="btn-row">
+          <button class="btn small" onclick="addInterval('warmup')">+ Warmup</button>
+          <button class="btn small" onclick="addInterval('interval')">+ Interval</button>
+          <button class="btn small" onclick="addInterval('recovery')">+ Recovery</button>
+          <button class="btn small" onclick="addInterval('cooldown')">+ Cooldown</button>
+          <button class="btn small" onclick="addInterval('rest')">+ Rest/Stop</button>
+        </div>
+
+        <div class="workout-intervals" id="intervalList">
+          <div class="interval-row header">
+            <div></div>
+            <div>Type</div>
+            <div>Duration</div>
+            <div>Unit</div>
+            <div>Power</div>
+            <div>Zone</div>
+            <div class="hide-mobile">Notes</div>
+            <div></div>
+          </div>
+        </div>
+
+        <div class="route-stats" id="workoutSummary" style="margin-top:1rem;"></div>
+      </div>
+
+      <!-- IMPORT -->
+      <div class="tab-panel" id="tabImport">
+        <p style="font-size:.82rem; color:var(--mid); margin-bottom:.75rem;">
+          Paste a workout in text format. One line per interval.<br>
+          Format: <code>type duration_minutes power_%ftp</code>
+          &nbsp; Types: warmup, interval, recovery, cooldown, rest
+        </p>
+        <textarea id="workoutTextImport" rows="10" style="width:100%; font-family:monospace; font-size:.8rem;" placeholder="warmup 10 55
+interval 5 105
+recovery 3 55
+interval 5 105
+recovery 3 55
+interval 5 105
+cooldown 10 55" oninput="previewImportText()"></textarea>
+        <div id="importPreview" style="font-size:.75rem; color:var(--muted); margin-top:.4rem;"></div>
+        <div style="margin-top:.5rem;">
+          <button class="btn" onclick="importWorkoutText()">Import &amp; Build ↓</button>
+        </div>
+      </div>
+
+      <!-- TEMPLATES -->
+      <div class="tab-panel" id="tabTemplates">
+        <div class="three-col">
+          <div class="card" style="padding:1rem; cursor:pointer;" onclick="loadTemplate('sweetspot')">
+            <h3 style="font-size:.85rem;">Sweet Spot</h3>
+            <p style="font-size:.75rem; color:var(--mid);">2×20 min @ 88-93% FTP</p>
+          </div>
+          <div class="card" style="padding:1rem; cursor:pointer;" onclick="loadTemplate('vo2max')">
+            <h3 style="font-size:.85rem;">VO₂max Intervals</h3>
+            <p style="font-size:.75rem; color:var(--mid);">5×3 min @ 115-120% FTP</p>
+          </div>
+          <div class="card" style="padding:1rem; cursor:pointer;" onclick="loadTemplate('threshold')">
+            <h3 style="font-size:.85rem;">Threshold</h3>
+            <p style="font-size:.75rem; color:var(--mid);">3×10 min @ 95-105% FTP</p>
+          </div>
+          <div class="card" style="padding:1rem; cursor:pointer;" onclick="loadTemplate('endurance')">
+            <h3 style="font-size:.85rem;">Endurance</h3>
+            <p style="font-size:.75rem; color:var(--mid);">90 min @ 65-75% FTP</p>
+          </div>
+          <div class="card" style="padding:1rem; cursor:pointer;" onclick="loadTemplate('over_under')">
+            <h3 style="font-size:.85rem;">Over/Under</h3>
+            <p style="font-size:.75rem; color:var(--mid);">3×(3 min over + 3 min under)</p>
+          </div>
+          <div class="card" style="padding:1rem; cursor:pointer;" onclick="loadTemplate('hill_repeats')">
+            <h3 style="font-size:.85rem;">Hill Repeats</h3>
+            <p style="font-size:.75rem; color:var(--mid);">6×2 min @ 115% FTP (hill)</p>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:1rem;">
+        <button class="btn" onclick="goToStep(2)">← Back</button>
+        <button class="btn" onclick="goToStep(4)" style="margin-left:.5rem;">Tune on Route →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ STEP 4: Tune ============ -->
+  <div id="step4Panel" style="display:none">
+    <div class="card">
+      <h2>4. Tune Workout to Route</h2>
+
+      <!-- Conflict warnings -->
+      <div id="conflictWarnings"></div>
+
+      <!-- Auto-suggest buttons -->
+      <div class="btn-row" id="suggestRow" style="display:none;">
+        <button class="btn small" onclick="autoSuggestFixes()">🔧 Auto-suggest fixes</button>
+        <button class="btn small" onclick="trimToRoute()">✂️ Trim workout to route</button>
+        <button class="btn small" onclick="padToRoute()">📏 Pad recovery to fill route</button>
+      </div>
+
+      <!-- Main tuning chart: elevation + workout overlay -->
+      <div style="position:relative; height:320px; margin-bottom:1rem;">
+        <canvas id="tuningChart"></canvas>
+      </div>
+
+      <!-- Power/Speed profile chart -->
+      <div style="position:relative; height:160px; margin-bottom:1rem;">
+        <canvas id="powerSpeedChart"></canvas>
+      </div>
+
+      <!-- Map synced to tuning -->
+      <div id="tuningMap" style="height:300px; border-radius:3px; border:1px solid var(--border); margin-bottom:1rem;"></div>
+
+      <!-- Speed / power analysis -->
+      <div class="tabs">
+        <button class="tab active" data-tab="intervals" onclick="setTuneTab('intervals')">Intervals</button>
+        <button class="tab" data-tab="segments" onclick="setTuneTab('segments')">Segment Analysis</button>
+        <button class="tab" data-tab="gearing" onclick="setTuneTab('gearing')">Gearing</button>
+      </div>
+
+      <!-- INTERVALS TAB -->
+      <div class="tab-panel active" id="tabIntervals">
+        <p style="font-size:.82rem; color:var(--mid); margin-bottom:.75rem;">
+          Adjust interval durations to avoid conflicts. Drag edges on the chart or edit values directly.
+          <strong>Red zones</strong> mark stop signs; <strong>orange</strong> marks caution areas.
+        </p>
+        <div id="tuneIntervalList"></div>
+        <div class="speed-note" style="margin-top:1rem;">
+          Speed is estimated using a physics model (rider weight, CdA, Crr, grade).
+          Distance = speed × time for each interval. Adjust durations so intervals
+          don't land on stops or exceed the route.
+        </div>
+      </div>
+
+      <!-- SEGMENTS TAB -->
+      <div class="tab-panel" id="tabSegments">
+        <div id="segmentAnalysis"></div>
+      </div>
+
+      <!-- GEARING TAB -->
+      <div class="tab-panel" id="tabGearing">
+        <div id="gearingAnalysis"></div>
+      </div>
+
+      <div style="margin-top:1rem;">
+        <button class="btn" onclick="goToStep(3)">← Back</button>
+        <button class="btn" onclick="goToStep(5)" style="margin-left:.5rem;">Export →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ STEP 5: Export ============ -->
+  <div id="step5Panel" style="display:none">
+    <div class="card">
+      <h2>5. Export Workout</h2>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="summary" onclick="setExportTab('summary')">Summary</button>
+        <button class="tab" data-tab="zwo" onclick="setExportTab('zwo')">ZWO</button>
+        <button class="tab" data-tab="mrc" onclick="setExportTab('mrc')">MRC/ERG</button>
+        <button class="tab" data-tab="text" onclick="setExportTab('text')">Text</button>
+      </div>
+
+      <div class="tab-panel active" id="tabSummary">
+        <div id="exportSummary"></div>
+      </div>
+
+      <div class="tab-panel" id="tabZwo">
+        <div class="export-preview" id="zwoPreview"></div>
+        <button class="btn small" onclick="downloadExport('zwo')">Download .zwo</button>
+      </div>
+
+      <div class="tab-panel" id="tabMrc">
+        <div class="export-preview" id="mrcPreview"></div>
+        <button class="btn small" onclick="downloadExport('mrc')">Download .mrc</button>
+      </div>
+
+      <div class="tab-panel" id="tabText">
+        <div class="export-preview" id="textPreview"></div>
+        <button class="btn small" onclick="downloadExport('txt')">Download .txt</button>
+      </div>
+
+      <div style="margin-top:1rem;">
+        <button class="btn" onclick="goToStep(4)">← Back to Tune</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- How it works -->
+  <div class="card" id="howItWorks">
+    <h2>How It Works</h2>
+    <div style="font-size:.85rem; color:var(--mid); line-height:1.7;">
+      <p style="margin-bottom:1rem;">
+        <strong>The problem:</strong> Structured cycling workouts (intervals, sweet spot, VO₂max, etc.)
+        are designed for trainers where you control the environment. On the road, you hit stop signs,
+        traffic lights, steep descents where you can't hold power, and hills where your gearing limits cadence.
+        Services like <a href="https://www.bestbikesplit.com/" style="color:var(--accent);">BestBikeSplit</a>
+        optimize pacing for <em>race performance</em>, but training is different — you need physiologically
+        appropriate intervals that fit your actual roads.
+      </p>
+      <p style="margin-bottom:1rem;">
+        <strong>What this tool does:</strong> It takes your workout and your route, then simulates the ride
+        using a physics model (aerodynamic drag, rolling resistance, gravity, rider weight). This tells you
+        <em>where on the road</em> each interval lands. You mark stops and hazards, and the tool flags
+        conflicts — like a 5-minute threshold interval that would have you blasting through a stop sign
+        at km 3.2. You can then manually shorten intervals, add rest breaks for stops, or use the
+        auto-suggest feature.
+      </p>
+      <p style="margin-bottom:1rem;">
+        <strong>Physics model:</strong> Speed = f(power, grade, CdA, Crr, mass). At each point along the
+        route, the tool computes the speed you'd sustain at the interval's target power on that grade.
+        Integration over time gives distance covered per interval. This is the same model used by
+        cycling physics simulators — Coggan's power-speed relationship.
+      </p>
+      <p style="margin-bottom:1rem;">
+        <strong>Gearing check:</strong> For each segment, the tool calculates what gear ratio you'd need
+        to maintain a cadence between your min and max at the resulting speed. On steep climbs at low speed,
+        you may run out of gears. On fast descents, you may spin out.
+      </p>
+      <p>
+        <strong>Hill repeats:</strong> Mark turnaround points on the route to designate climb sections.
+        Design your workout around the climb — hard efforts going up, recovery going down. The
+        turnaround markers help you see exactly where to turn.
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// =====================================================================
+//  STATE
+// =====================================================================
+let routeData = null;          // {points: [{lat,lon,ele,dist}], totalDist, totalElev, ...}
+let annotations = [];          // [{type:'stop'|'caution'|'turnaround', dist, lat, lon}]
+let workout = [];              // [{id, type, durationSec, powerPct, zone, notes}]
+let annotationMode = null;     // current annotation placement mode
+let map = null, tuningMap = null;
+let elevationChart = null, tuningChart = null;
+let routePolyline = null, tuningPolyline = null;
+let nextIntervalId = 1;
+let currentStep = 1;
+
+// Physics constants
+const AIR_DENSITY = 1.225; // kg/m³
+const G = 9.81;
+
+// Zone colors
+const ZONE_COLORS = {
+  recovery:  {bg: 'rgba(76,175,80,0.35)',  border: '#4caf50', text: 'Z1 Recovery'},
+  endurance: {bg: 'rgba(139,195,74,0.35)', border: '#8bc34a', text: 'Z2 Endurance'},
+  tempo:     {bg: 'rgba(255,193,7,0.35)',  border: '#ffc107', text: 'Z3 Tempo'},
+  sweetspot: {bg: 'rgba(255,152,0,0.35)',  border: '#ff9800', text: 'SS Sweet Spot'},
+  threshold: {bg: 'rgba(255,87,34,0.35)',  border: '#ff5722', text: 'Z4 Threshold'},
+  vo2max:    {bg: 'rgba(244,67,54,0.35)',  border: '#f44336', text: 'Z5 VO₂max'},
+  anaerobic: {bg: 'rgba(156,39,176,0.35)', border: '#9c27b0', text: 'Z6 Anaerobic'},
+  sprint:    {bg: 'rgba(233,30,99,0.35)',  border: '#e91e63', text: 'Z7 Sprint'},
+  rest:      {bg: 'rgba(158,158,158,0.25)',border: '#9e9e9e', text: 'Rest'},
+};
+
+// Zone from power pct
+function zoneFromPower(pct) {
+  if (pct === 0) return 'rest';
+  if (pct < 56) return 'recovery';
+  if (pct < 76) return 'endurance';
+  if (pct < 88) return 'tempo';
+  if (pct < 95) return 'sweetspot';
+  if (pct < 106) return 'threshold';
+  if (pct < 121) return 'vo2max';
+  if (pct < 150) return 'anaerobic';
+  return 'sprint';
+}
+
+function zoneColor(zone) {
+  return ZONE_COLORS[zone] || ZONE_COLORS.endurance;
+}
+
+// =====================================================================
+//  STEP NAVIGATION
+// =====================================================================
+function goToStep(n) {
+  currentStep = n;
+  for (let i = 1; i <= 5; i++) {
+    document.getElementById(`step${i}Panel`).style.display = i === n ? '' : 'none';
+  }
+  // Update indicator
+  document.querySelectorAll('.step-indicator .step').forEach(el => {
+    const s = parseInt(el.dataset.step);
+    el.classList.remove('done', 'current');
+    if (s < n) el.classList.add('done');
+    if (s === n) el.classList.add('current');
+  });
+  // Init things per step
+  if (n === 2 && routeData) {
+    // Small delay to ensure the container is visible before Leaflet measures it
+    setTimeout(() => {
+      if (!map) initMap();
+      else map.invalidateSize();
+      if (!elevationChart) initElevationChart();
+    }, 50);
+  }
+  if (n === 3) updateWorkoutSummary();
+  if (n === 4) {
+    // Auto-import text if user typed in the import box but forgot to click Import
+    if (workout.length === 0) {
+      const textArea = document.getElementById('workoutTextImport');
+      if (textArea && textArea.value.trim().length > 5) {
+        importWorkoutText();
+      }
+    }
+    setTimeout(() => initTuning(), 50);
+  }
+  if (n === 5) initExport();
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+// =====================================================================
+//  ROUTE LOADING
+// =====================================================================
+function setupDropZone() {
+  const zone = document.getElementById('routeDropZone');
+  const input = document.getElementById('routeFileInput');
+
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('dragover', e => {e.preventDefault(); zone.classList.add('dragover');});
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) handleRouteFile(e.dataTransfer.files[0]);
+  });
+  input.addEventListener('change', () => {
+    if (input.files.length) handleRouteFile(input.files[0]);
+  });
+}
+
+function handleRouteFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      if (ext === 'json') {
+        loadAnnotatedRouteFromJSON(e.target.result);
+        return;
+      }
+      parseGPX(e.target.result);
+      goToStep(2);
+    } catch (err) {
+      alert('Error parsing file: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function parseGPX(xml) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'text/xml');
+
+  // Try track points first, then route points
+  let trkpts = doc.querySelectorAll('trkpt');
+  if (trkpts.length === 0) trkpts = doc.querySelectorAll('rtept');
+  if (trkpts.length === 0) throw new Error('No track or route points found');
+
+  const points = [];
+  let totalDist = 0, totalClimb = 0, totalDesc = 0;
+
+  trkpts.forEach((pt, i) => {
+    const lat = parseFloat(pt.getAttribute('lat'));
+    const lon = parseFloat(pt.getAttribute('lon'));
+    const eleEl = pt.querySelector('ele');
+    const ele = eleEl ? parseFloat(eleEl.textContent) : 0;
+
+    // Extract time if available (activity GPX files have timestamps)
+    const timeEl = pt.querySelector('time');
+    const time = timeEl ? new Date(timeEl.textContent).getTime() / 1000 : null;
+
+    if (i > 0) {
+      const prev = points[i - 1];
+      const d = haversine(prev.lat, prev.lon, lat, lon);
+      totalDist += d;
+      const dEle = ele - prev.ele;
+      if (dEle > 0) totalClimb += dEle;
+      else totalDesc += Math.abs(dEle);
+    }
+
+    points.push({lat, lon, ele, dist: totalDist, time});
+  });
+
+  // Smooth elevation (5-point moving average)
+  const smoothed = [];
+  const window = 5;
+  for (let i = 0; i < points.length; i++) {
+    let sum = 0, count = 0;
+    for (let j = Math.max(0, i - window); j <= Math.min(points.length - 1, i + window); j++) {
+      sum += points[j].ele;
+      count++;
+    }
+    smoothed.push(sum / count);
+  }
+  points.forEach((p, i) => p.eleSmooth = smoothed[i]);
+
+  // Compute grades (over 50m segments)
+  for (let i = 0; i < points.length; i++) {
+    if (i === 0) { points[i].grade = 0; continue; }
+    // Look back up to 50m
+    let j = i - 1;
+    while (j > 0 && (points[i].dist - points[j].dist) < 50) j--;
+    const dd = points[i].dist - points[j].dist;
+    const de = points[i].eleSmooth - points[j].eleSmooth;
+    points[i].grade = dd > 0 ? (de / dd) * 100 : 0;
+  }
+
+  routeData = {
+    points,
+    totalDist,
+    totalClimb,
+    totalDesc,
+    minEle: Math.min(...points.map(p => p.ele)),
+    maxEle: Math.max(...points.map(p => p.ele)),
+  };
+}
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// Demo route: a hilly out-and-back with realistic terrain
+function loadDemoRoute() {
+  const points = [];
+  const numPoints = 500;
+  // Out-and-back starting south of Boulder
+  const startLat = 39.975, startLon = -105.25;
+
+  let dist = 0;
+
+  for (let i = 0; i < numPoints; i++) {
+    const t = i / numPoints;
+
+    // Path goes north, turns west into hills, then back
+    let lat, lon, ele;
+
+    if (t < 0.25) {
+      // Flat road north
+      const s = t / 0.25;
+      lat = startLat + s * 0.035;
+      lon = startLon + s * 0.005;
+      ele = 1610 + s * 20 + 3 * Math.sin(s * 8 * Math.PI);
+    } else if (t < 0.45) {
+      // Turn west, climb into foothills
+      const s = (t - 0.25) / 0.2;
+      lat = startLat + 0.035 + s * 0.01;
+      lon = startLon + 0.005 - s * 0.03;
+      ele = 1630 + s * 180 + 20 * Math.sin(s * 4 * Math.PI); // ~9% avg grade
+    } else if (t < 0.55) {
+      // Ridge top, rolling
+      const s = (t - 0.45) / 0.1;
+      lat = startLat + 0.045 + s * 0.005;
+      lon = startLon - 0.025 - s * 0.01;
+      ele = 1810 + 25 * Math.sin(s * 6 * Math.PI);
+    } else if (t < 0.75) {
+      // Descend back east
+      const s = (t - 0.55) / 0.2;
+      lat = startLat + 0.05 - s * 0.01;
+      lon = startLon - 0.035 + s * 0.03;
+      ele = 1810 - s * 180 + 15 * Math.sin(s * 5 * Math.PI);
+    } else {
+      // Flat road south back to start
+      const s = (t - 0.75) / 0.25;
+      lat = startLat + 0.04 - s * 0.04;
+      lon = startLon - 0.005 + s * 0.005;
+      ele = 1630 - s * 20 + 3 * Math.sin(s * 8 * Math.PI);
+    }
+
+    if (i > 0) {
+      dist += haversine(points[i-1].lat, points[i-1].lon, lat, lon);
+    }
+
+    points.push({lat, lon, ele, dist, time: null});
+  }
+
+  // Smooth and compute grades
+  const win = 5;
+  for (let i = 0; i < points.length; i++) {
+    let sum = 0, count = 0;
+    for (let j = Math.max(0, i - win); j <= Math.min(points.length - 1, i + win); j++) {
+      sum += points[j].ele; count++;
+    }
+    points[i].eleSmooth = sum / count;
+  }
+  for (let i = 0; i < points.length; i++) {
+    if (i === 0) { points[i].grade = 0; continue; }
+    let j = i - 1;
+    while (j > 0 && (points[i].dist - points[j].dist) < 50) j--;
+    const dd = points[i].dist - points[j].dist;
+    const de = points[i].eleSmooth - points[j].eleSmooth;
+    points[i].grade = dd > 0 ? (de / dd) * 100 : 0;
+  }
+
+  const totalDist = points[points.length - 1].dist;
+  let totalClimb = 0, totalDesc = 0;
+  for (let i = 1; i < points.length; i++) {
+    const d = points[i].eleSmooth - points[i-1].eleSmooth;
+    if (d > 0) totalClimb += d; else totalDesc += Math.abs(d);
+  }
+
+  routeData = {
+    points, totalDist, totalClimb, totalDesc,
+    minEle: Math.min(...points.map(p => p.ele)),
+    maxEle: Math.max(...points.map(p => p.ele)),
+  };
+
+  // Add some demo annotations
+  annotations = [
+    {type: 'stop', dist: totalDist * 0.15, ...pointAtDist(totalDist * 0.15)},
+    {type: 'stop', dist: totalDist * 0.45, ...pointAtDist(totalDist * 0.45)},
+    {type: 'caution', dist: totalDist * 0.7, ...pointAtDist(totalDist * 0.7)},
+  ];
+
+  goToStep(2);
+}
+
+// Get lat/lon at a given distance along route
+function pointAtDist(d) {
+  if (!routeData) return {lat: 0, lon: 0, ele: 0, grade: 0};
+  const pts = routeData.points;
+  for (let i = 1; i < pts.length; i++) {
+    if (pts[i].dist >= d) {
+      const t = (d - pts[i-1].dist) / (pts[i].dist - pts[i-1].dist || 1);
+      return {
+        lat: pts[i-1].lat + t * (pts[i].lat - pts[i-1].lat),
+        lon: pts[i-1].lon + t * (pts[i].lon - pts[i-1].lon),
+        ele: pts[i-1].eleSmooth + t * (pts[i].eleSmooth - pts[i-1].eleSmooth),
+        grade: pts[i].grade,
+      };
+    }
+  }
+  return {lat: pts[pts.length-1].lat, lon: pts[pts.length-1].lon,
+          ele: pts[pts.length-1].eleSmooth, grade: 0};
+}
+
+// Get grade at distance
+function gradeAtDist(d) {
+  return pointAtDist(d).grade;
+}
+
+// =====================================================================
+//  MAP
+// =====================================================================
+function initMap() {
+  if (map) { map.remove(); map = null; }
+  map = L.map('map');
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+
+  const latlngs = routeData.points.map(p => [p.lat, p.lon]);
+  routePolyline = L.polyline(latlngs, {color: '#1a1a1a', weight: 3}).addTo(map);
+  map.fitBounds(routePolyline.getBounds(), {padding: [30, 30]});
+
+  // Click handler for annotations
+  map.on('click', e => {
+    if (!annotationMode) return;
+    const closest = closestPointOnRoute(e.latlng.lat, e.latlng.lng);
+    addAnnotation(annotationMode, closest.dist, closest.lat, closest.lon);
+    setAnnotationMode(null);
+  });
+
+  renderAnnotationMarkers();
+  renderRouteStats();
+}
+
+function closestPointOnRoute(lat, lon) {
+  let minD = Infinity, best = routeData.points[0];
+  for (const p of routeData.points) {
+    const d = haversine(lat, lon, p.lat, p.lon);
+    if (d < minD) { minD = d; best = p; }
+  }
+  return best;
+}
+
+let annotationMarkers = [];
+function renderAnnotationMarkers() {
+  if (!map) return;
+  annotationMarkers.forEach(m => map.removeLayer(m));
+  annotationMarkers = [];
+
+  annotations.forEach((a, i) => {
+    const cls = a.type === 'stop' ? 'stop-marker' :
+                a.type === 'caution' ? 'caution-marker' : 'turnaround-marker';
+    const icon = L.divIcon({
+      className: cls,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+    });
+    const marker = L.marker([a.lat, a.lon], {icon}).addTo(map);
+    const label = a.type === 'stop' ? '🛑 Stop' : a.type === 'caution' ? '⚠️ Caution' : '🔄 Turnaround';
+    marker.bindPopup(`${label} at ${(a.dist/1000).toFixed(2)} km<br>
+      <a href="#" onclick="removeAnnotation(${i}); return false;" style="color:var(--accent);">Remove</a>`);
+    annotationMarkers.push(marker);
+  });
+
+  renderStopList();
+}
+
+function renderStopList() {
+  const el = document.getElementById('stopList');
+  if (annotations.length === 0) {
+    el.innerHTML = '<div style="font-size:.82rem; color:var(--muted); padding:.5rem 0;">No annotations yet. Click the buttons above then click on the map.</div>';
+    return;
+  }
+  el.innerHTML = annotations.sort((a,b) => a.dist - b.dist).map((a, i) => {
+    const label = a.type === 'stop' ? 'Stop sign' : a.type === 'caution' ? 'Caution zone' : 'Turnaround';
+    return `<div class="stop-item">
+      <span class="stop-dot ${a.type}"></span>
+      <span><strong>${label}</strong> at ${(a.dist/1000).toFixed(2)} km (${(a.dist/1609.34).toFixed(2)} mi)</span>
+      <button class="btn small danger" onclick="removeAnnotation(${i})" style="margin-left:auto;">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function addAnnotation(type, dist, lat, lon) {
+  annotations.push({type, dist, lat, lon});
+  renderAnnotationMarkers();
+  if (elevationChart) updateElevationAnnotations();
+}
+
+window.removeAnnotation = function(i) {
+  annotations.splice(i, 1);
+  renderAnnotationMarkers();
+  if (elevationChart) updateElevationAnnotations();
+};
+
+function setAnnotationMode(mode) {
+  annotationMode = mode;
+  document.getElementById('addStopBtn').classList.toggle('active', mode === 'stop');
+  document.getElementById('addCautionBtn').classList.toggle('active', mode === 'caution');
+  document.getElementById('addTurnaroundBtn').classList.toggle('active', mode === 'turnaround');
+  document.getElementById('cancelAnnotBtn').style.display = mode ? '' : 'none';
+  document.getElementById('annotModeHint').style.display = mode ? '' : 'none';
+
+  if (map) {
+    map.getContainer().style.cursor = mode ? 'crosshair' : '';
+  }
+}
+
+function clearAnnotations() {
+  annotations = [];
+  renderAnnotationMarkers();
+  if (elevationChart) updateElevationAnnotations();
+}
+
+// =====================================================================
+//  AUTO-DETECT STOPS FROM ROUTE SPEED
+// =====================================================================
+function autoDetectStops() {
+  if (!routeData) return;
+
+  const thresholdKmh = parseFloat(document.getElementById('stopSpeedThreshold').value) || 5;
+  const thresholdMs = thresholdKmh / 3.6;
+  const minGap = parseFloat(document.getElementById('stopMinGap').value) || 200;
+  const pts = routeData.points;
+
+  // We need speed data — compute from GPS if not already present
+  // Speed between consecutive points
+  const speeds = [];
+  for (let i = 0; i < pts.length; i++) {
+    if (i === 0) { speeds.push(0); continue; }
+    const dd = pts[i].dist - pts[i-1].dist;
+    // If we have time data (from activity GPX), use it
+    // Otherwise estimate from spacing (route-only GPX won't have speed)
+    if (pts[i].time && pts[i-1].time) {
+      const dt = pts[i].time - pts[i-1].time;
+      speeds.push(dt > 0 ? dd / dt : 0);
+    } else {
+      // No time data — can't detect stops from speed
+      speeds.push(-1);
+    }
+  }
+
+  // Check if we actually have time-based speed data
+  const hasTimeData = speeds.some(s => s >= 0 && s !== -1);
+
+  if (!hasTimeData) {
+    // Fallback: detect likely intersections from sharp turns in the route
+    autoDetectFromTurns();
+    return;
+  }
+
+  // Smooth speeds (5-point)
+  const smoothSpeeds = [];
+  for (let i = 0; i < speeds.length; i++) {
+    let sum = 0, count = 0;
+    for (let j = Math.max(0, i - 2); j <= Math.min(speeds.length - 1, i + 2); j++) {
+      if (speeds[j] >= 0) { sum += speeds[j]; count++; }
+    }
+    smoothSpeeds.push(count > 0 ? sum / count : 0);
+  }
+
+  // Find stop regions: contiguous runs where speed < threshold
+  const stopRegions = [];
+  let inStop = false, stopStart = -1;
+
+  for (let i = 0; i < pts.length; i++) {
+    if (smoothSpeeds[i] < thresholdMs && smoothSpeeds[i] >= 0) {
+      if (!inStop) { inStop = true; stopStart = i; }
+    } else {
+      if (inStop) {
+        // Use the midpoint of the stop region
+        const mid = Math.floor((stopStart + i) / 2);
+        stopRegions.push({
+          dist: pts[mid].dist,
+          lat: pts[mid].lat,
+          lon: pts[mid].lon,
+          startIdx: stopStart,
+          endIdx: i,
+          minSpeed: Math.min(...smoothSpeeds.slice(stopStart, i).filter(s => s >= 0)),
+        });
+        inStop = false;
+      }
+    }
+  }
+
+  // Merge stops that are too close together
+  const merged = [];
+  for (const stop of stopRegions) {
+    if (merged.length > 0 && (stop.dist - merged[merged.length - 1].dist) < minGap) {
+      // Keep the one with the lower min speed
+      if (stop.minSpeed < merged[merged.length - 1].minSpeed) {
+        merged[merged.length - 1] = stop;
+      }
+    } else {
+      merged.push(stop);
+    }
+  }
+
+  // Skip the very start and end (first/last 100m — that's just the ride start/end)
+  const filtered = merged.filter(s =>
+    s.dist > 100 && s.dist < (routeData.totalDist - 100)
+  );
+
+  // Clear existing auto-detected stops (keep manual ones? no — just replace all)
+  annotations = [];
+
+  for (const stop of filtered) {
+    annotations.push({
+      type: stop.minSpeed < 1 ? 'stop' : 'caution',
+      dist: stop.dist,
+      lat: stop.lat,
+      lon: stop.lon,
+    });
+  }
+
+  renderAnnotationMarkers();
+  if (elevationChart) updateElevationAnnotations();
+
+  // Open the details panel to show what was found
+  document.getElementById('autoDetectDetails').open = true;
+}
+
+// Fallback: detect likely stops from sharp turns (route-only GPX without time data)
+function autoDetectFromTurns() {
+  if (!routeData) return;
+  const pts = routeData.points;
+  const minGap = parseFloat(document.getElementById('stopMinGap').value) || 200;
+
+  annotations = [];
+  let lastDist = -minGap;
+
+  for (let i = 2; i < pts.length - 2; i++) {
+    // Compute bearing change
+    const b1 = Math.atan2(pts[i].lon - pts[i-2].lon, pts[i].lat - pts[i-2].lat);
+    const b2 = Math.atan2(pts[i+2].lon - pts[i].lon, pts[i+2].lat - pts[i].lat);
+    let turn = Math.abs(b2 - b1) * 180 / Math.PI;
+    if (turn > 180) turn = 360 - turn;
+
+    // Sharp turns (> 60°) at intersections
+    if (turn > 60 && (pts[i].dist - lastDist) > minGap) {
+      annotations.push({
+        type: 'caution',
+        dist: pts[i].dist,
+        lat: pts[i].lat,
+        lon: pts[i].lon,
+      });
+      lastDist = pts[i].dist;
+    }
+  }
+
+  renderAnnotationMarkers();
+  if (elevationChart) updateElevationAnnotations();
+
+  if (annotations.length === 0) {
+    alert('No stops or sharp turns detected. This route may not have time data. Try adding stops manually.');
+  }
+}
+
+// =====================================================================
+//  SAVE / LOAD ANNOTATED ROUTE
+// =====================================================================
+function saveAnnotatedRoute() {
+  if (!routeData) { alert('No route loaded.'); return; }
+
+  const data = {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    route: {
+      points: routeData.points.map(p => ({
+        lat: p.lat, lon: p.lon, ele: p.ele, dist: p.dist,
+        time: p.time || null,
+      })),
+      totalDist: routeData.totalDist,
+      totalClimb: routeData.totalClimb,
+      totalDesc: routeData.totalDesc,
+    },
+    annotations: annotations.map(a => ({
+      type: a.type, dist: a.dist, lat: a.lat, lon: a.lon,
+    })),
+    // Also save rider config so the whole setup is portable
+    rider: {
+      ftp: document.getElementById('ftpInput').value,
+      weight: document.getElementById('weightInput').value,
+      bikeWeight: document.getElementById('bikeWeightInput').value,
+      cda: document.getElementById('cdaInput').value,
+      crr: document.getElementById('crrInput').value,
+      windSpeed: document.getElementById('windSpeedInput').value,
+      windDir: document.getElementById('windDirInput').value,
+    },
+  };
+
+  const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'annotated-route.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function loadAnnotatedRoute(input) {
+  if (!input.files.length) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    loadAnnotatedRouteFromJSON(e.target.result);
+  };
+  reader.readAsText(input.files[0]);
+  input.value = '';
+}
+
+function loadAnnotatedRouteFromJSON(jsonStr) {
+  try {
+    const data = JSON.parse(jsonStr);
+    if (!data.route || !data.route.points) throw new Error('Invalid file format');
+
+      // Rebuild routeData
+      const points = data.route.points;
+      // Re-compute smoothed elevation and grade
+      const win = 5;
+      for (let i = 0; i < points.length; i++) {
+        let sum = 0, count = 0;
+        for (let j = Math.max(0, i - win); j <= Math.min(points.length - 1, i + win); j++) {
+          sum += points[j].ele; count++;
+        }
+        points[i].eleSmooth = sum / count;
+      }
+      for (let i = 0; i < points.length; i++) {
+        if (i === 0) { points[i].grade = 0; continue; }
+        let j = i - 1;
+        while (j > 0 && (points[i].dist - points[j].dist) < 50) j--;
+        const dd = points[i].dist - points[j].dist;
+        const de = points[i].eleSmooth - points[j].eleSmooth;
+        points[i].grade = dd > 0 ? (de / dd) * 100 : 0;
+      }
+
+      routeData = {
+        points,
+        totalDist: data.route.totalDist,
+        totalClimb: data.route.totalClimb,
+        totalDesc: data.route.totalDesc,
+        minEle: Math.min(...points.map(p => p.ele)),
+        maxEle: Math.max(...points.map(p => p.ele)),
+      };
+
+      // Restore annotations
+      annotations = data.annotations || [];
+
+      // Restore rider config if present
+      if (data.rider) {
+        const r = data.rider;
+        if (r.ftp) document.getElementById('ftpInput').value = r.ftp;
+        if (r.weight) document.getElementById('weightInput').value = r.weight;
+        if (r.bikeWeight) document.getElementById('bikeWeightInput').value = r.bikeWeight;
+        if (r.cda) document.getElementById('cdaInput').value = r.cda;
+        if (r.crr) document.getElementById('crrInput').value = r.crr;
+        if (r.windSpeed) document.getElementById('windSpeedInput').value = r.windSpeed;
+        if (r.windDir) document.getElementById('windDirInput').value = r.windDir;
+      }
+
+      // Reset map/chart so they reinitialize
+      if (map) { map.remove(); map = null; }
+      if (elevationChart) { elevationChart.destroy(); elevationChart = null; }
+
+      goToStep(2);
+  } catch (err) {
+    alert('Error loading annotated route: ' + err.message);
+  }
+}
+
+// =====================================================================
+//  ELEVATION CHART
+// =====================================================================
+function initElevationChart() {
+  if (elevationChart) { elevationChart.destroy(); elevationChart = null; }
+
+  const pts = routeData.points;
+  const distKm = pts.map(p => p.dist / 1000);
+  const elev = pts.map(p => p.eleSmooth);
+  const grades = pts.map(p => p.grade);
+
+  // Color by grade
+  const gradeColors = grades.map(g => {
+    const ag = Math.abs(g);
+    if (ag < 3) return 'rgba(76,175,80,0.6)';
+    if (ag < 6) return 'rgba(255,193,7,0.6)';
+    if (ag < 10) return 'rgba(244,67,54,0.6)';
+    return 'rgba(156,39,176,0.6)';
+  });
+
+  const ctx = document.getElementById('elevationChart').getContext('2d');
+  elevationChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: distKm,
+      datasets: [{
+        label: 'Elevation',
+        data: elev,
+        borderColor: '#1a1a1a',
+        borderWidth: 1.5,
+        backgroundColor: createGradeGradient(ctx, pts),
+        fill: true,
+        pointRadius: 0,
+        tension: 0.2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {mode: 'index', intersect: false},
+      onClick: (e, elements, chart) => {
+        if (!annotationMode) return;
+        const xScale = chart.scales.x;
+        const distKm = xScale.getValueForPixel(e.x);
+        const distM = distKm * 1000;
+        const p = pointAtDist(distM);
+        addAnnotation(annotationMode, distM, p.lat, p.lon);
+        setAnnotationMode(null);
+      },
+      plugins: {
+        legend: {display: false},
+        tooltip: {
+          callbacks: {
+            title: items => `${items[0].parsed.x.toFixed(2)} km`,
+            label: item => {
+              const idx = item.dataIndex;
+              const grade = pts[idx].grade.toFixed(1);
+              return `${item.parsed.y.toFixed(0)}m  (${grade}%)`;
+            }
+          }
+        },
+        annotation: {annotations: {}}
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          title: {display: true, text: 'Distance (km)', font: {size: 11}},
+          ticks: {callback: v => v.toFixed(1)},
+          grid: {color: 'rgba(0,0,0,0.05)'},
+        },
+        y: {
+          title: {display: true, text: 'Elevation (m)', font: {size: 11}},
+          grid: {color: 'rgba(0,0,0,0.05)'},
+        }
+      }
+    }
+  });
+
+  updateElevationAnnotations();
+}
+
+function createGradeGradient(ctx, pts) {
+  // Simple fill gradient based on elevation
+  const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+  gradient.addColorStop(0, 'rgba(139,195,74,0.4)');
+  gradient.addColorStop(1, 'rgba(139,195,74,0.05)');
+  return gradient;
+}
+
+function updateElevationAnnotations() {
+  if (!elevationChart) return;
+  const annots = {};
+  annotations.forEach((a, i) => {
+    const color = a.type === 'stop' ? '#e74c3c' : a.type === 'caution' ? '#ff9800' : '#2196f3';
+    annots[`annot${i}`] = {
+      type: 'line',
+      xMin: a.dist / 1000,
+      xMax: a.dist / 1000,
+      borderColor: color,
+      borderWidth: 2,
+      borderDash: a.type === 'caution' ? [4, 4] : [],
+      label: {
+        display: true,
+        content: a.type === 'stop' ? '🛑' : a.type === 'caution' ? '⚠️' : '🔄',
+        position: 'start',
+        font: {size: 14},
+      }
+    };
+  });
+  elevationChart.options.plugins.annotation.annotations = annots;
+  elevationChart.update('none');
+}
+
+function renderRouteStats() {
+  const el = document.getElementById('routeStats');
+  const d = routeData;
+  el.innerHTML = `
+    <div class="stat"><span class="stat-label">Distance</span><span class="stat-value">${(d.totalDist/1000).toFixed(1)} km</span></div>
+    <div class="stat"><span class="stat-label">Elevation gain</span><span class="stat-value">${d.totalClimb.toFixed(0)} m</span></div>
+    <div class="stat"><span class="stat-label">Elevation loss</span><span class="stat-value">${d.totalDesc.toFixed(0)} m</span></div>
+    <div class="stat"><span class="stat-label">Min / Max ele</span><span class="stat-value">${d.minEle.toFixed(0)} / ${d.maxEle.toFixed(0)} m</span></div>
+    <div class="stat"><span class="stat-label">Avg grade</span><span class="stat-value">${avgGrade().toFixed(1)}%</span></div>
+    <div class="stat"><span class="stat-label">Max grade</span><span class="stat-value">${maxGrade().toFixed(1)}%</span></div>
+  `;
+}
+
+function avgGrade() {
+  return routeData.points.reduce((s, p) => s + Math.abs(p.grade), 0) / routeData.points.length;
+}
+
+function maxGrade() {
+  return Math.max(...routeData.points.map(p => Math.abs(p.grade)));
+}
+
+// =====================================================================
+//  PHYSICS MODEL
+// =====================================================================
+
+// Compute headwind at a point along the route given wind speed/direction
+function headwindAtDist(dist) {
+  const windSpeedKmh = parseFloat(document.getElementById('windSpeedInput').value) || 0;
+  if (windSpeedKmh === 0) return 0;
+  const windFromDeg = parseFloat(document.getElementById('windDirInput').value) || 0;
+  const windSpeedMs = windSpeedKmh / 3.6;
+  // Wind blows FROM windFromDeg — the velocity vector points opposite
+  const windVecDeg = (windFromDeg + 180) % 360;
+
+  // Get bearing of the route at this distance
+  const bearing = bearingAtDist(dist);
+
+  // Headwind = component of wind velocity opposing direction of travel
+  const angleDiff = (windVecDeg - bearing) * Math.PI / 180;
+  // Negative cos = headwind (wind coming towards rider), positive = tailwind
+  return -windSpeedMs * Math.cos(angleDiff);
+}
+
+function bearingAtDist(dist) {
+  if (!routeData) return 0;
+  const pts = routeData.points;
+  for (let i = 1; i < pts.length; i++) {
+    if (pts[i].dist >= dist) {
+      const dLon = (pts[i].lon - pts[i-1].lon) * Math.PI / 180;
+      const lat1 = pts[i-1].lat * Math.PI / 180;
+      const lat2 = pts[i].lat * Math.PI / 180;
+      const x = Math.sin(dLon) * Math.cos(lat2);
+      const y = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+      return ((Math.atan2(x, y) * 180 / Math.PI) + 360) % 360;
+    }
+  }
+  return 0;
+}
+
+function estimateSpeed(powerWatts, gradePct, headwindMs = 0) {
+  const riderMass = parseFloat(document.getElementById('weightInput').value) || 75;
+  const bikeMass = parseFloat(document.getElementById('bikeWeightInput').value) || 9;
+  const totalMass = riderMass + bikeMass;
+  const cda = parseFloat(document.getElementById('cdaInput').value) || 0.32;
+  const crr = parseFloat(document.getElementById('crrInput').value) || 0.005;
+  const grade = gradePct / 100;
+
+  // Solve: P = F_total * v
+  // F_total = F_aero + F_roll + F_gravity
+  // Use bisection — robust and simple
+  const gradeAngle = Math.atan(grade);
+  const gravityForce = totalMass * G * Math.sin(gradeAngle);
+  const rollingForce = crr * totalMass * G * Math.cos(gradeAngle);
+
+  function powerAtSpeed(v) {
+    if (v <= 0) return 0;
+    const vWind = v + headwindMs;
+    const aeroForce = 0.5 * AIR_DENSITY * cda * vWind * Math.abs(vWind);
+    return (aeroForce + rollingForce + gravityForce) * v;
+  }
+
+  // Rest / stopped
+  if (powerWatts <= 0) {
+    // On a descent, find coasting speed where net force = 0
+    if (grade < -0.005) {
+      let lo = 0, hi = 30;
+      for (let i = 0; i < 40; i++) {
+        const mid = (lo + hi) / 2;
+        if (powerAtSpeed(mid) > 0) hi = mid; else lo = mid;
+      }
+      return Math.max(lo, 0);
+    }
+    return 0;
+  }
+
+  // Bisection: find v where powerAtSpeed(v) = powerWatts
+  let lo = 0.3, hi = 30;
+  if (powerAtSpeed(lo) > powerWatts) return lo; // barely moving on steep climb
+
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    if (powerAtSpeed(mid) < powerWatts) lo = mid;
+    else hi = mid;
+  }
+
+  return Math.max((lo + hi) / 2, 0.3);
+}
+
+// Check if a given speed is achievable with gearing
+function checkGearing(speedMs) {
+  const minCad = parseFloat(document.getElementById('minCadenceInput').value) || 60;
+  const maxCad = parseFloat(document.getElementById('maxCadenceInput').value) || 110;
+  const maxGear = parseFloat(document.getElementById('maxGearInput').value) || 2.88;
+  const minGear = parseFloat(document.getElementById('minGearInput').value) || 1.0;
+  const wheelCirc = (parseFloat(document.getElementById('wheelCircInput').value) || 2105) / 1000; // meters
+
+  // speed = cadence/60 * gear_ratio * wheel_circ
+  const requiredGearAtMinCad = speedMs / (minCad / 60 * wheelCirc);
+  const requiredGearAtMaxCad = speedMs / (maxCad / 60 * wheelCirc);
+
+  const issues = [];
+  if (requiredGearAtMaxCad > maxGear) {
+    issues.push(`Need gear ratio ${requiredGearAtMaxCad.toFixed(2)} at max cadence — exceeds max gear ${maxGear}`);
+  }
+  if (requiredGearAtMinCad < minGear) {
+    issues.push(`Need gear ratio ${requiredGearAtMinCad.toFixed(2)} at min cadence — below easiest gear ${minGear}`);
+  }
+
+  return {
+    ok: issues.length === 0,
+    issues,
+    cadenceRange: [
+      speedMs / (maxGear * wheelCirc) * 60,
+      speedMs / (minGear * wheelCirc) * 60,
+    ],
+    requiredGearAtMinCad,
+    requiredGearAtMaxCad,
+  };
+}
+
+// =====================================================================
+//  WORKOUT BUILDER
+// =====================================================================
+function addInterval(type, durationSec, powerPct, notes) {
+  const defaults = {
+    warmup:   {dur: 600, pwr: 55},
+    interval: {dur: 300, pwr: 100},
+    recovery: {dur: 180, pwr: 55},
+    cooldown: {dur: 600, pwr: 50},
+    rest:     {dur: 60,  pwr: 0},
+  };
+  const d = defaults[type] || defaults.interval;
+  const w = {
+    id: nextIntervalId++,
+    type: type,
+    durationSec: durationSec || d.dur,
+    powerPct: powerPct !== undefined ? powerPct : d.pwr,
+    zone: zoneFromPower(powerPct !== undefined ? powerPct : d.pwr),
+    notes: notes || '',
+  };
+  workout.push(w);
+  renderIntervalList();
+  updateWorkoutSummary();
+}
+
+function removeInterval(id) {
+  workout = workout.filter(w => w.id !== id);
+  renderIntervalList();
+  updateWorkoutSummary();
+}
+
+function updateInterval(id, field, value) {
+  const w = workout.find(w => w.id === id);
+  if (!w) return;
+  if (field === 'durationSec') w.durationSec = parseInt(value) || 0;
+  if (field === 'durationMin') w.durationSec = Math.round((parseFloat(value) || 0) * 60);
+  if (field === 'powerPct') {
+    w.powerPct = parseInt(value) || 0;
+    w.zone = zoneFromPower(w.powerPct);
+  }
+  if (field === 'type') w.type = value;
+  if (field === 'notes') w.notes = value;
+  renderIntervalList();
+  updateWorkoutSummary();
+}
+
+function renderIntervalList() {
+  const el = document.getElementById('intervalList');
+  const header = `<div class="interval-row header">
+    <div></div><div>Type</div><div>Duration</div><div>Unit</div>
+    <div>Power</div><div>Zone</div><div class="hide-mobile">Notes</div><div></div>
+  </div>`;
+
+  const rows = workout.map((w, i) => {
+    const zc = zoneColor(w.zone);
+    return `<div class="interval-row" data-id="${w.id}">
+      <span class="drag-handle" title="Drag to reorder">⠿</span>
+      <select onchange="updateInterval(${w.id},'type',this.value)">
+        ${['warmup','interval','recovery','cooldown','rest'].map(t =>
+          `<option value="${t}" ${t === w.type ? 'selected' : ''}>${t}</option>`
+        ).join('')}
+      </select>
+      <input type="number" value="${(w.durationSec/60).toFixed(1)}" min="0.1" max="180" step="0.5"
+             onchange="updateInterval(${w.id},'durationMin',this.value)">
+      <span style="font-size:.75rem; color:var(--muted);">min</span>
+      <input type="number" value="${w.powerPct}" min="0" max="200" step="5"
+             onchange="updateInterval(${w.id},'powerPct',this.value)">
+      <span style="font-size:.75rem; display:flex; align-items:center; gap:.3rem;">
+        <span class="interval-color" style="background:${zc.bg}; border-color:${zc.border};"></span>
+        ${zc.text}
+      </span>
+      <input class="hide-mobile" type="text" value="${w.notes}" placeholder="notes..."
+             onchange="updateInterval(${w.id},'notes',this.value)" style="font-size:.75rem;">
+      <button class="remove-btn" onclick="removeInterval(${w.id})">✕</button>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = header + rows;
+  initDragAndDrop();
+}
+
+function initDragAndDrop() {
+  // Simple drag-and-drop reordering
+  const container = document.getElementById('intervalList');
+  let dragging = null;
+
+  container.querySelectorAll('.drag-handle').forEach(handle => {
+    const row = handle.closest('.interval-row');
+    handle.addEventListener('mousedown', e => {
+      dragging = row;
+      row.style.opacity = '0.5';
+    });
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    // Find which row we're over
+    const rows = [...container.querySelectorAll('.interval-row:not(.header)')];
+    for (const row of rows) {
+      const rect = row.getBoundingClientRect();
+      if (e.clientY > rect.top && e.clientY < rect.bottom && row !== dragging) {
+        const parent = row.parentNode;
+        const allRows = [...parent.querySelectorAll('.interval-row:not(.header)')];
+        const dragIdx = allRows.indexOf(dragging);
+        const overIdx = allRows.indexOf(row);
+        if (dragIdx < overIdx) {
+          parent.insertBefore(dragging, row.nextSibling);
+        } else {
+          parent.insertBefore(dragging, row);
+        }
+        break;
+      }
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging.style.opacity = '';
+    // Reorder workout array to match DOM
+    const rows = [...container.querySelectorAll('.interval-row:not(.header)')];
+    const newOrder = rows.map(r => parseInt(r.dataset.id));
+    workout.sort((a, b) => newOrder.indexOf(a.id) - newOrder.indexOf(b.id));
+    dragging = null;
+    updateWorkoutSummary();
+  });
+}
+
+function updateWorkoutSummary() {
+  const el = document.getElementById('workoutSummary');
+  if (workout.length === 0) {
+    el.innerHTML = '<div style="font-size:.82rem; color:var(--muted);">Add intervals to build your workout.</div>';
+    return;
+  }
+
+  const totalSec = workout.reduce((s, w) => s + w.durationSec, 0);
+  const ftp = parseFloat(document.getElementById('ftpInput')?.value) || 250;
+
+  // Estimate TSS
+  const tss = workout.reduce((s, w) => {
+    const np = ftp * w.powerPct / 100;
+    const IF_ = np / ftp;
+    return s + (w.durationSec * np * IF_) / (ftp * 3600) * 100;
+  }, 0);
+
+  // Estimate total kJ
+  const kj = workout.reduce((s, w) => s + (ftp * w.powerPct / 100 * w.durationSec / 1000), 0);
+
+  // Estimate distance (rough)
+  let totalDistEst = 0;
+  for (const w of workout) {
+    const speed = estimateSpeed(ftp * w.powerPct / 100, 0); // flat for estimate
+    totalDistEst += speed * w.durationSec;
+  }
+
+  el.innerHTML = `
+    <div class="stat"><span class="stat-label">Total time</span><span class="stat-value">${formatTime(totalSec)}</span></div>
+    <div class="stat"><span class="stat-label">Est. TSS</span><span class="stat-value">${tss.toFixed(0)}</span></div>
+    <div class="stat"><span class="stat-label">Est. kJ</span><span class="stat-value">${kj.toFixed(0)}</span></div>
+    <div class="stat"><span class="stat-label">Est. distance (flat)</span><span class="stat-value">${(totalDistEst/1000).toFixed(1)} km</span></div>
+    ${routeData ? `<div class="stat"><span class="stat-label">Route distance</span><span class="stat-value">${(routeData.totalDist/1000).toFixed(1)} km</span></div>` : ''}
+  `;
+}
+
+function formatTime(sec) {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+// Workout templates
+function loadTemplate(name) {
+  workout = [];
+  nextIntervalId = 1;
+  const templates = {
+    sweetspot: [
+      {type:'warmup', dur:600, pwr:55},
+      {type:'interval', dur:1200, pwr:90},
+      {type:'recovery', dur:300, pwr:55},
+      {type:'interval', dur:1200, pwr:90},
+      {type:'cooldown', dur:600, pwr:50},
+    ],
+    vo2max: [
+      {type:'warmup', dur:600, pwr:55},
+      {type:'interval', dur:180, pwr:118},
+      {type:'recovery', dur:180, pwr:50},
+      {type:'interval', dur:180, pwr:118},
+      {type:'recovery', dur:180, pwr:50},
+      {type:'interval', dur:180, pwr:118},
+      {type:'recovery', dur:180, pwr:50},
+      {type:'interval', dur:180, pwr:118},
+      {type:'recovery', dur:180, pwr:50},
+      {type:'interval', dur:180, pwr:118},
+      {type:'cooldown', dur:600, pwr:50},
+    ],
+    threshold: [
+      {type:'warmup', dur:600, pwr:55},
+      {type:'interval', dur:600, pwr:100},
+      {type:'recovery', dur:300, pwr:50},
+      {type:'interval', dur:600, pwr:100},
+      {type:'recovery', dur:300, pwr:50},
+      {type:'interval', dur:600, pwr:100},
+      {type:'cooldown', dur:600, pwr:50},
+    ],
+    endurance: [
+      {type:'warmup', dur:600, pwr:55},
+      {type:'interval', dur:4200, pwr:70},
+      {type:'cooldown', dur:600, pwr:50},
+    ],
+    over_under: [
+      {type:'warmup', dur:600, pwr:55},
+      {type:'interval', dur:180, pwr:108},
+      {type:'interval', dur:180, pwr:92},
+      {type:'interval', dur:180, pwr:108},
+      {type:'interval', dur:180, pwr:92},
+      {type:'interval', dur:180, pwr:108},
+      {type:'interval', dur:180, pwr:92},
+      {type:'recovery', dur:300, pwr:50},
+      {type:'interval', dur:180, pwr:108},
+      {type:'interval', dur:180, pwr:92},
+      {type:'interval', dur:180, pwr:108},
+      {type:'interval', dur:180, pwr:92},
+      {type:'interval', dur:180, pwr:108},
+      {type:'interval', dur:180, pwr:92},
+      {type:'cooldown', dur:600, pwr:50},
+    ],
+    hill_repeats: [
+      {type:'warmup', dur:600, pwr:55},
+      {type:'interval', dur:120, pwr:115},
+      {type:'recovery', dur:180, pwr:45},
+      {type:'interval', dur:120, pwr:115},
+      {type:'recovery', dur:180, pwr:45},
+      {type:'interval', dur:120, pwr:115},
+      {type:'recovery', dur:180, pwr:45},
+      {type:'interval', dur:120, pwr:115},
+      {type:'recovery', dur:180, pwr:45},
+      {type:'interval', dur:120, pwr:115},
+      {type:'recovery', dur:180, pwr:45},
+      {type:'interval', dur:120, pwr:115},
+      {type:'cooldown', dur:600, pwr:50},
+    ],
+  };
+
+  const t = templates[name];
+  if (!t) return;
+  t.forEach(i => addInterval(i.type, i.dur, i.pwr));
+  setWorkoutTab('build');
+}
+
+function parseWorkoutLines(text) {
+  // Shared parser — returns array of {type, dur, pwr, notes}
+  const validTypes = ['warmup', 'interval', 'recovery', 'cooldown', 'rest'];
+  const intervals = [];
+  text.split('\n').forEach(line => {
+    line = line.trim();
+    if (!line || line.startsWith('#')) return;
+    const parts = line.split(/\s+/);
+    if (parts.length < 3) return;
+    const type = parts[0].toLowerCase();
+    const dur = parseFloat(parts[1]) * 60;
+    const pwr = parseInt(parts[2]);
+    if (isNaN(dur) || isNaN(pwr)) return;
+    intervals.push({
+      type: validTypes.includes(type) ? type : 'interval',
+      dur, pwr,
+      notes: parts.slice(3).join(' '),
+    });
+  });
+  return intervals;
+}
+
+function previewImportText() {
+  const text = document.getElementById('workoutTextImport').value.trim();
+  const el = document.getElementById('importPreview');
+  if (!text) { el.innerHTML = ''; return; }
+  const intervals = parseWorkoutLines(text);
+  if (intervals.length === 0) {
+    el.innerHTML = '<span style="color:var(--accent);">No valid intervals parsed. Format: type minutes power%</span>';
+    return;
+  }
+  const totalMin = intervals.reduce((s, i) => s + i.dur, 0) / 60;
+  const summary = intervals.map(i =>
+    `${i.type} ${(i.dur/60).toFixed(1)}m @${i.pwr}%`
+  ).join(' → ');
+  el.innerHTML = `✓ ${intervals.length} intervals, ${totalMin.toFixed(0)} min total<br><span style="font-size:.65rem;">${summary}</span>`;
+}
+
+function importWorkoutText() {
+  const text = document.getElementById('workoutTextImport').value.trim();
+  if (!text) return;
+
+  const intervals = parseWorkoutLines(text);
+  if (intervals.length === 0) return;
+
+  workout = [];
+  nextIntervalId = 1;
+  intervals.forEach(i => addInterval(i.type, i.dur, i.pwr, i.notes));
+
+  setWorkoutTab('build');
+}
+
+// Tab switching (generic helper)
+function switchTab(containerSel, name) {
+  document.querySelectorAll(`${containerSel} .tab`).forEach(t => t.classList.remove('active'));
+  document.querySelectorAll(`${containerSel} .tab-panel`).forEach(p => p.classList.remove('active'));
+  const panelId = 'tab' + name.charAt(0).toUpperCase() + name.slice(1);
+  document.getElementById(panelId)?.classList.add('active');
+  document.querySelectorAll(`${containerSel} .tab`).forEach(t => {
+    if (t.dataset.tab === name) t.classList.add('active');
+  });
+}
+
+function setWorkoutTab(name) { switchTab('#step3Panel', name); }
+
+// =====================================================================
+//  TUNING — THE CORE FEATURE
+// =====================================================================
+function initTuning() {
+  if (!routeData || workout.length === 0) {
+    document.getElementById('conflictWarnings').innerHTML =
+      '<div class="warning">Load a route and build a workout first.</div>';
+    return;
+  }
+
+  // Simulate the ride: map workout intervals to route distance
+  simulateRide();
+  renderTuningChart();
+  renderPowerSpeedChart();
+  renderTuningMap();
+  renderConflicts();
+  renderTuneIntervalList();
+  renderSegmentAnalysis();
+  renderGearingAnalysis();
+}
+
+// Simulate: for each interval, compute distance covered based on speed at current grade
+let rideSimulation = []; // [{intervalId, startDist, endDist, startTime, endTime, avgSpeed, avgGrade, conflicts:[]}]
+
+function simulateRide() {
+  rideSimulation = [];
+  if (!routeData || workout.length === 0) return;
+
+  const ftp = parseFloat(document.getElementById('ftpInput').value) || 250;
+  let currentDist = 0;
+  let currentTime = 0;
+
+  for (const w of workout) {
+    const power = ftp * w.powerPct / 100;
+    const startDist = currentDist;
+    const startTime = currentTime;
+
+    // Simulate this interval second-by-second (or in 5-second steps for perf)
+    const step = 5; // seconds
+    let distAccum = 0;
+    let gradeSum = 0, gradeCount = 0;
+    let speedSum = 0;
+
+    for (let t = 0; t < w.durationSec; t += step) {
+      const dt = Math.min(step, w.durationSec - t);
+      const grade = gradeAtDist(currentDist);
+      gradeSum += Math.abs(grade);
+      gradeCount++;
+
+      let speed;
+      if (w.powerPct === 0) {
+        speed = 0; // rest/stop
+      } else {
+        const hw = headwindAtDist(currentDist);
+        speed = estimateSpeed(power, grade, hw);
+      }
+      speedSum += speed;
+
+      currentDist += speed * dt;
+      currentTime += dt;
+    }
+
+    const endDist = currentDist;
+    const endTime = currentTime;
+    const avgSpeed = gradeCount > 0 ? speedSum / gradeCount : 0;
+    const avgGrade = gradeCount > 0 ? gradeSum / gradeCount : 0;
+
+    // Check for conflicts with annotations
+    const conflicts = [];
+    for (const a of annotations) {
+      if (a.dist >= startDist && a.dist <= endDist) {
+        if (a.type === 'stop' && w.type === 'interval') {
+          conflicts.push({annotation: a, severity: 'high', msg: `Stop sign at ${(a.dist/1000).toFixed(2)} km falls inside this interval`});
+        } else if (a.type === 'caution' && w.type === 'interval') {
+          conflicts.push({annotation: a, severity: 'medium', msg: `Caution zone at ${(a.dist/1000).toFixed(2)} km falls inside this interval`});
+        } else if (a.type === 'turnaround') {
+          conflicts.push({annotation: a, severity: 'info', msg: `Turnaround at ${(a.dist/1000).toFixed(2)} km — consider this for hill repeats`});
+        }
+      }
+    }
+
+    // Check if interval exceeds route
+    if (endDist > routeData.totalDist) {
+      conflicts.push({severity: 'high', msg: `This interval extends ${((endDist - routeData.totalDist)/1000).toFixed(2)} km beyond the route`});
+    }
+
+    rideSimulation.push({
+      intervalId: w.id,
+      interval: w,
+      startDist, endDist,
+      startTime, endTime,
+      avgSpeed, avgGrade,
+      conflicts,
+    });
+  }
+}
+
+function renderConflicts() {
+  const el = document.getElementById('conflictWarnings');
+  const allConflicts = rideSimulation.flatMap((s, i) =>
+    s.conflicts.map(c => ({...c, intervalIndex: i, intervalType: s.interval.type}))
+  );
+
+  // Also check if workout exceeds route
+  const lastSim = rideSimulation[rideSimulation.length - 1];
+  let overRoute = false;
+  if (lastSim && lastSim.endDist > routeData.totalDist) {
+    overRoute = true;
+  }
+
+  let html = '';
+  if (overRoute) {
+    const excess = (lastSim.endDist - routeData.totalDist) / 1000;
+    html += `<div class="warning">Workout extends ${excess.toFixed(2)} km beyond the route. Shorten intervals or extend your route.</div>`;
+  }
+
+  const highConflicts = allConflicts.filter(c => c.severity === 'high');
+  const medConflicts = allConflicts.filter(c => c.severity === 'medium');
+
+  if (highConflicts.length > 0) {
+    html += highConflicts.map(c =>
+      `<div class="warning">${c.msg} (interval #${c.intervalIndex + 1}: ${c.intervalType})</div>`
+    ).join('');
+  }
+  if (medConflicts.length > 0) {
+    html += medConflicts.map(c =>
+      `<div class="warning" style="background:#fff3cd; border-color:#ffc107;">${c.msg}</div>`
+    ).join('');
+  }
+
+  if (!html) {
+    html = '<div style="background:#d4edda; border:1px solid #28a745; border-radius:3px; padding:.5rem .75rem; font-size:.82rem; color:#155724; margin-bottom:.75rem;">✅ No conflicts detected. Workout fits the route cleanly.</div>';
+  }
+
+  el.innerHTML = html;
+
+  // Show suggest row always (can always trim/pad, and sometimes has conflicts to fix)
+  const suggestRow = document.getElementById('suggestRow');
+  if (suggestRow) {
+    suggestRow.style.display = '';
+  }
+}
+
+function renderTuneIntervalList() {
+  const el = document.getElementById('tuneIntervalList');
+  const ftp = parseFloat(document.getElementById('ftpInput').value) || 250;
+
+  let html = `<div class="interval-row header" style="grid-template-columns:40px 90px 80px 80px 70px 70px 70px 1fr;">
+    <div>#</div><div>Type</div><div>Duration</div><div>Power %</div><div>Speed</div><div>Start</div><div>End</div><div>Issues</div>
+  </div>`;
+
+  rideSimulation.forEach((sim, i) => {
+    const w = sim.interval;
+    const zc = zoneColor(w.zone);
+    const hasConflict = sim.conflicts.length > 0;
+    const bg = hasConflict ? '#fff5f5' : '';
+
+    html += `<div class="interval-row" style="grid-template-columns:40px 90px 80px 80px 70px 70px 70px 1fr; ${bg ? 'background:'+bg : ''}">
+      <span style="font-weight:700; color:${zc.border};">${i + 1}</span>
+      <span style="font-size:.78rem;">${w.type}</span>
+      <input type="number" value="${(w.durationSec/60).toFixed(1)}" min="0.1" max="180" step="0.5"
+             style="font-size:.78rem; width:70px;"
+             onchange="tuneInterval(${w.id}, parseFloat(this.value))"
+             title="Duration in minutes">
+      <div style="display:flex; align-items:center; gap:.2rem;">
+        <input type="number" value="${w.powerPct}" min="0" max="200" step="5"
+               style="font-size:.78rem; width:50px;"
+               onchange="tunePower(${w.id}, parseInt(this.value))"
+               title="Power as % FTP">
+        <span style="font-size:.65rem; color:var(--muted);">${Math.round(ftp * w.powerPct / 100)}W</span>
+      </div>
+      <span style="font-size:.78rem;">${(sim.avgSpeed * 3.6).toFixed(1)}</span>
+      <span style="font-size:.78rem;">${(sim.startDist/1000).toFixed(2)}</span>
+      <span style="font-size:.78rem;">${(sim.endDist/1000).toFixed(2)}</span>
+      <span style="font-size:.72rem; color:${hasConflict ? 'var(--accent)' : 'var(--muted)'};">
+        ${sim.conflicts.length > 0 ? sim.conflicts.map(c => c.msg).join('; ') : '✓'}
+      </span>
+    </div>`;
+  });
+
+  el.innerHTML = html;
+}
+
+function tunePower(id, newPowerPct) {
+  const w = workout.find(w => w.id === id);
+  if (!w) return;
+  w.powerPct = newPowerPct;
+  w.zone = zoneFromPower(newPowerPct);
+  initTuning();
+}
+
+function tuneInterval(id, newDurationMin) {
+  const w = workout.find(w => w.id === id);
+  if (!w) return;
+  w.durationSec = Math.round(newDurationMin * 60);
+  initTuning(); // re-simulate
+}
+
+// =====================================================================
+//  AUTO-SUGGEST FIXES
+// =====================================================================
+function autoSuggestFixes() {
+  if (!rideSimulation.length) return;
+  const ftp = parseFloat(document.getElementById('ftpInput').value) || 250;
+  let changed = false;
+
+  // Strategy: for each interval that has a stop/caution conflict,
+  // shorten it so it ends before the annotation, or split it with a rest.
+  for (let i = 0; i < rideSimulation.length; i++) {
+    const sim = rideSimulation[i];
+    const highConflicts = sim.conflicts.filter(c => c.severity === 'high' && c.annotation);
+
+    if (highConflicts.length > 0 && sim.interval.type === 'interval') {
+      // Shorten this interval to end 50m before the first stop
+      const firstStop = highConflicts[0].annotation;
+      const bufferDist = 50; // meters buffer before stop
+      const targetEndDist = firstStop.dist - bufferDist;
+
+      if (targetEndDist > sim.startDist + 100) {
+        // Calculate how long it takes to reach targetEndDist
+        const power = ftp * sim.interval.powerPct / 100;
+        let dist = sim.startDist;
+        let time = 0;
+        const step = 5;
+
+        while (dist < targetEndDist && time < sim.interval.durationSec) {
+          const grade = gradeAtDist(dist);
+          const speed = estimateSpeed(power, grade);
+          dist += speed * step;
+          time += step;
+        }
+
+        // Shorten interval
+        const oldDur = sim.interval.durationSec;
+        sim.interval.durationSec = Math.max(30, Math.round(time / 5) * 5);
+
+        // Insert a rest after this interval for the stop
+        const restDur = 15; // 15 second stop
+        const remainingDur = oldDur - sim.interval.durationSec;
+
+        // Find position in workout array
+        const idx = workout.findIndex(w => w.id === sim.interval.id);
+        if (idx >= 0) {
+          // Add rest for stop
+          const restInterval = {
+            id: nextIntervalId++,
+            type: 'rest',
+            durationSec: restDur,
+            powerPct: 0,
+            zone: 'rest',
+            notes: `Stop at ${(firstStop.dist/1000).toFixed(2)} km`,
+          };
+
+          // Add remaining interval time after stop (if substantial)
+          if (remainingDur > 30) {
+            const continueInterval = {
+              id: nextIntervalId++,
+              type: sim.interval.type,
+              durationSec: remainingDur,
+              powerPct: sim.interval.powerPct,
+              zone: sim.interval.zone,
+              notes: 'Resumed after stop',
+            };
+            workout.splice(idx + 1, 0, restInterval, continueInterval);
+          } else {
+            workout.splice(idx + 1, 0, restInterval);
+          }
+          changed = true;
+        }
+      }
+    }
+  }
+
+  if (changed) {
+    initTuning();
+  } else {
+    // Check if we just need to suggest shifting
+    const allOk = rideSimulation.every(s => s.conflicts.length === 0);
+    if (allOk) {
+      alert('No conflicts to fix! Your workout fits the route cleanly.');
+    } else {
+      alert('Could not auto-fix all conflicts. Try manually adjusting interval durations.');
+    }
+  }
+}
+
+function trimToRoute() {
+  if (!rideSimulation.length || !routeData) return;
+
+  // Find the last interval that's still within the route
+  let lastGoodIdx = -1;
+  for (let i = 0; i < rideSimulation.length; i++) {
+    if (rideSimulation[i].startDist < routeData.totalDist) {
+      lastGoodIdx = i;
+    }
+  }
+
+  if (lastGoodIdx < 0) return;
+
+  // If the last good interval extends past the route, shorten it
+  const lastSim = rideSimulation[lastGoodIdx];
+  if (lastSim.endDist > routeData.totalDist) {
+    const ftp = parseFloat(document.getElementById('ftpInput').value) || 250;
+    const power = ftp * lastSim.interval.powerPct / 100;
+    let dist = lastSim.startDist, time = 0;
+    const step = 5;
+    while (dist < routeData.totalDist && time < lastSim.interval.durationSec) {
+      const grade = gradeAtDist(dist);
+      const speed = estimateSpeed(power, grade);
+      dist += speed * step;
+      time += step;
+    }
+    lastSim.interval.durationSec = Math.max(30, Math.round(time / 5) * 5);
+  }
+
+  // Remove intervals past the route
+  const keepIds = new Set(rideSimulation.slice(0, lastGoodIdx + 1).map(s => s.intervalId));
+  workout = workout.filter(w => keepIds.has(w.id));
+
+  // Add a cooldown if the last interval isn't one
+  if (workout.length > 0 && workout[workout.length - 1].type !== 'cooldown') {
+    addInterval('cooldown', 300, 50);
+  }
+
+  initTuning();
+}
+
+function padToRoute() {
+  if (!rideSimulation.length || !routeData) return;
+
+  const lastSim = rideSimulation[rideSimulation.length - 1];
+  const remaining = routeData.totalDist - lastSim.endDist;
+
+  if (remaining <= 100) {
+    alert('Workout already fills the route (or exceeds it).');
+    return;
+  }
+
+  // Estimate how long to ride the remaining distance at recovery pace
+  const ftp = parseFloat(document.getElementById('ftpInput').value) || 250;
+  const recoveryPower = ftp * 0.5;
+  let dist = lastSim.endDist, time = 0;
+  const step = 5;
+  while (dist < routeData.totalDist && time < 7200) {
+    const grade = gradeAtDist(dist);
+    const speed = estimateSpeed(recoveryPower, grade);
+    dist += speed * step;
+    time += step;
+  }
+
+  addInterval('cooldown', Math.round(time / 5) * 5, 50, 'Padded to fill route');
+  initTuning();
+}
+
+// =====================================================================
+//  POWER / SPEED CHART
+// =====================================================================
+let powerSpeedChart = null;
+
+function renderPowerSpeedChart() {
+  if (powerSpeedChart) { powerSpeedChart.destroy(); powerSpeedChart = null; }
+
+  const ftp = parseFloat(document.getElementById('ftpInput').value) || 250;
+
+  // Build power and speed data points along the route
+  const powerData = [];
+  const speedData = [];
+  const gradeData = [];
+
+  rideSimulation.forEach(sim => {
+    const w = sim.interval;
+    const power = ftp * w.powerPct / 100;
+    const startKm = sim.startDist / 1000;
+    const endKm = sim.endDist / 1000;
+
+    // Sample at start and end of each interval
+    powerData.push({x: startKm, y: power});
+    powerData.push({x: endKm, y: power});
+
+    speedData.push({x: startKm, y: sim.avgSpeed * 3.6});
+    speedData.push({x: endKm, y: sim.avgSpeed * 3.6});
+  });
+
+  // Grade data from route
+  const pts = routeData.points;
+  for (let i = 0; i < pts.length; i += 3) {
+    gradeData.push({x: pts[i].dist / 1000, y: pts[i].grade});
+  }
+
+  const ctx = document.getElementById('powerSpeedChart').getContext('2d');
+  powerSpeedChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: 'Power (W)',
+          data: powerData,
+          borderColor: '#e74c3c',
+          borderWidth: 2,
+          backgroundColor: 'rgba(231,76,60,0.1)',
+          fill: true,
+          pointRadius: 0,
+          stepped: true,
+          yAxisID: 'yPower',
+        },
+        {
+          label: 'Speed (km/h)',
+          data: speedData,
+          borderColor: '#2196f3',
+          borderWidth: 1.5,
+          backgroundColor: 'rgba(33,150,243,0.05)',
+          fill: false,
+          pointRadius: 0,
+          stepped: true,
+          yAxisID: 'ySpeed',
+        },
+        {
+          label: 'Grade (%)',
+          data: gradeData,
+          borderColor: 'rgba(0,0,0,0.15)',
+          borderWidth: 1,
+          backgroundColor: 'rgba(0,0,0,0.03)',
+          fill: true,
+          pointRadius: 0,
+          tension: 0.3,
+          yAxisID: 'yGrade',
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {mode: 'index', intersect: false},
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          labels: {font: {size: 10}, boxWidth: 12, padding: 8},
+        },
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          title: {display: false},
+          ticks: {callback: v => v.toFixed(1) + ' km', font: {size: 9}},
+          grid: {color: 'rgba(0,0,0,0.05)'},
+        },
+        yPower: {
+          position: 'left',
+          title: {display: true, text: 'Watts', font: {size: 9}},
+          grid: {color: 'rgba(0,0,0,0.05)'},
+          ticks: {font: {size: 9}},
+        },
+        ySpeed: {
+          position: 'right',
+          title: {display: true, text: 'km/h', font: {size: 9}},
+          grid: {display: false},
+          ticks: {font: {size: 9}},
+        },
+        yGrade: {
+          display: false,
+          min: -20, max: 20,
+        },
+      }
+    }
+  });
+}
+
+// =====================================================================
+//  TUNING CHART
+// =====================================================================
+function renderTuningChart() {
+  if (tuningChart) { tuningChart.destroy(); tuningChart = null; }
+
+  const pts = routeData.points;
+  const distKm = pts.map(p => p.dist / 1000);
+  const elev = pts.map(p => p.eleSmooth);
+
+  // Build annotation boxes for each interval
+  const annotations_chart = {};
+
+  rideSimulation.forEach((sim, i) => {
+    const zc = zoneColor(sim.interval.zone);
+    annotations_chart[`int${i}`] = {
+      type: 'box',
+      xMin: sim.startDist / 1000,
+      xMax: Math.min(sim.endDist, routeData.totalDist) / 1000,
+      backgroundColor: zc.bg,
+      borderColor: zc.border,
+      borderWidth: 1,
+      label: {
+        display: sim.endDist - sim.startDist > routeData.totalDist * 0.04,
+        content: `${sim.interval.type} ${sim.interval.powerPct}%`,
+        position: {x: 'center', y: 'start'},
+        font: {size: 10, weight: 'bold'},
+        color: zc.border,
+      },
+    };
+  });
+
+  // Add stop/caution lines
+  annotations.forEach((a, i) => {
+    const color = a.type === 'stop' ? '#e74c3c' : a.type === 'caution' ? '#ff9800' : '#2196f3';
+    annotations_chart[`stop${i}`] = {
+      type: 'line',
+      xMin: a.dist / 1000,
+      xMax: a.dist / 1000,
+      borderColor: color,
+      borderWidth: 2.5,
+      borderDash: a.type === 'caution' ? [6, 4] : [],
+      label: {
+        display: true,
+        content: a.type === 'stop' ? '🛑' : a.type === 'caution' ? '⚠️' : '🔄',
+        position: 'start',
+        font: {size: 16},
+      }
+    };
+  });
+
+  const ctx = document.getElementById('tuningChart').getContext('2d');
+  tuningChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: distKm,
+      datasets: [{
+        label: 'Elevation',
+        data: elev,
+        borderColor: '#1a1a1a',
+        borderWidth: 1.5,
+        backgroundColor: 'rgba(139,195,74,0.1)',
+        fill: true,
+        pointRadius: 0,
+        tension: 0.2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {mode: 'index', intersect: false},
+      plugins: {
+        legend: {display: false},
+        annotation: {annotations: annotations_chart},
+        tooltip: {
+          callbacks: {
+            title: items => {
+              const km = items[0].parsed.x;
+              const sim = rideSimulation.find(s => s.startDist/1000 <= km && s.endDist/1000 >= km);
+              if (sim) {
+                // Interpolate time within this interval
+                const pctThrough = (km * 1000 - sim.startDist) / (sim.endDist - sim.startDist || 1);
+                const timeAtPoint = sim.startTime + pctThrough * (sim.endTime - sim.startTime);
+                return `${km.toFixed(2)} km  •  ${formatTime(Math.round(timeAtPoint))} elapsed  •  ${sim.interval.type} @ ${sim.interval.powerPct}% FTP`;
+              }
+              return `${km.toFixed(2)} km`;
+            },
+            label: item => {
+              const idx = item.dataIndex;
+              const grade = pts[idx].grade.toFixed(1);
+              return `${item.parsed.y.toFixed(0)}m  grade: ${grade}%`;
+            }
+          }
+        },
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          title: {display: true, text: 'Distance (km)', font: {size: 11}},
+          ticks: {callback: v => v.toFixed(1)},
+          grid: {color: 'rgba(0,0,0,0.05)'},
+        },
+        y: {
+          title: {display: true, text: 'Elevation (m)', font: {size: 11}},
+          grid: {color: 'rgba(0,0,0,0.05)'},
+        }
+      }
+    }
+  });
+}
+
+// =====================================================================
+//  TUNING MAP
+// =====================================================================
+function renderTuningMap() {
+  if (tuningMap) { tuningMap.remove(); tuningMap = null; }
+  tuningMap = L.map('tuningMap');
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(tuningMap);
+
+  // Draw route segments colored by interval zone
+  const pts = routeData.points;
+
+  // First draw base route in light gray
+  const baseLatlngs = pts.map(p => [p.lat, p.lon]);
+  L.polyline(baseLatlngs, {color: '#ddd', weight: 5}).addTo(tuningMap);
+
+  // Overlay colored segments for each interval
+  rideSimulation.forEach(sim => {
+    const zc = zoneColor(sim.interval.zone);
+    const segPts = pts.filter(p => p.dist >= sim.startDist && p.dist <= sim.endDist);
+    if (segPts.length > 1) {
+      L.polyline(segPts.map(p => [p.lat, p.lon]), {
+        color: zc.border,
+        weight: 4,
+        opacity: 0.8,
+      }).addTo(tuningMap);
+    }
+  });
+
+  // Add annotation markers
+  for (const a of annotations) {
+    const cls = a.type === 'stop' ? 'stop-marker' :
+                a.type === 'caution' ? 'caution-marker' : 'turnaround-marker';
+    const icon = L.divIcon({
+      className: cls,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+    });
+    L.marker([a.lat, a.lon], {icon}).addTo(tuningMap);
+  }
+
+  tuningMap.fitBounds(L.polyline(baseLatlngs).getBounds(), {padding: [30, 30]});
+}
+
+// =====================================================================
+//  SEGMENT ANALYSIS
+// =====================================================================
+function renderSegmentAnalysis() {
+  const el = document.getElementById('segmentAnalysis');
+  const ftp = parseFloat(document.getElementById('ftpInput').value) || 250;
+
+  let html = `<table class="gear-table">
+    <tr>
+      <th>#</th><th>Type</th><th>Dist</th><th>Time</th>
+      <th>Power</th><th>Avg Grade</th><th>Avg Speed</th>
+      <th>Max Grade</th><th>Note</th>
+    </tr>`;
+
+  rideSimulation.forEach((sim, i) => {
+    const w = sim.interval;
+    const distKm = (sim.endDist - sim.startDist) / 1000;
+
+    // Find max grade in this segment
+    const segPts = routeData.points.filter(p => p.dist >= sim.startDist && p.dist <= sim.endDist);
+    const maxGrade = segPts.length > 0 ? Math.max(...segPts.map(p => Math.abs(p.grade))) : 0;
+    const avgGrade = segPts.length > 0 ? segPts.reduce((s, p) => s + p.grade, 0) / segPts.length : 0;
+
+    const gradeClass = maxGrade > 10 ? 'grade-extreme' : maxGrade > 6 ? 'grade-hard' :
+                       maxGrade > 3 ? 'grade-mod' : 'grade-easy';
+
+    const power = Math.round(ftp * w.powerPct / 100);
+    const notes = [];
+    if (avgGrade > 5 && w.type === 'interval') notes.push('🏔 Good hill effort');
+    if (avgGrade < -3 && w.type === 'interval') notes.push('⚡ Downhill — hard to hold power');
+    if (maxGrade > 12) notes.push('⚠ Very steep section');
+
+    html += `<tr>
+      <td>${i + 1}</td>
+      <td>${w.type}</td>
+      <td>${distKm.toFixed(2)} km</td>
+      <td>${formatTime(w.durationSec)}</td>
+      <td>${power}W (${w.powerPct}%)</td>
+      <td class="${gradeClass}">${avgGrade.toFixed(1)}%</td>
+      <td>${(sim.avgSpeed * 3.6).toFixed(1)} km/h</td>
+      <td class="${gradeClass}">${maxGrade.toFixed(1)}%</td>
+      <td style="font-size:.75rem;">${notes.join(', ') || '—'}</td>
+    </tr>`;
+  });
+
+  html += '</table>';
+
+  // Summary
+  const totalTime = rideSimulation.length > 0 ?
+    rideSimulation[rideSimulation.length - 1].endTime : 0;
+  const totalDist = rideSimulation.length > 0 ?
+    rideSimulation[rideSimulation.length - 1].endDist : 0;
+
+  html += `<div class="route-stats" style="margin-top:1rem;">
+    <div class="stat"><span class="stat-label">Est. ride time</span><span class="stat-value">${formatTime(totalTime)}</span></div>
+    <div class="stat"><span class="stat-label">Est. distance</span><span class="stat-value">${(totalDist/1000).toFixed(1)} km</span></div>
+    <div class="stat"><span class="stat-label">Route length</span><span class="stat-value">${(routeData.totalDist/1000).toFixed(1)} km</span></div>
+  </div>`;
+
+  el.innerHTML = html;
+}
+
+// =====================================================================
+//  GEARING ANALYSIS
+// =====================================================================
+function renderGearingAnalysis() {
+  const el = document.getElementById('gearingAnalysis');
+  const ftp = parseFloat(document.getElementById('ftpInput').value) || 250;
+
+  let html = `<p style="font-size:.82rem; color:var(--mid); margin-bottom:1rem;">
+    Shows whether your gearing can handle the speed at each segment's grade.
+    <strong class="warn">Red</strong> = gear limit exceeded.
+  </p>`;
+
+  html += `<table class="gear-table">
+    <tr>
+      <th>#</th><th>Type</th><th>Speed</th>
+      <th>Min Cadence</th><th>Max Cadence</th>
+      <th>Gear Needed</th><th>Status</th>
+    </tr>`;
+
+  rideSimulation.forEach((sim, i) => {
+    const w = sim.interval;
+    if (w.powerPct === 0) {
+      html += `<tr><td>${i+1}</td><td>${w.type}</td><td colspan="5" style="color:var(--muted);">Rest (stopped)</td></tr>`;
+      return;
+    }
+
+    const check = checkGearing(sim.avgSpeed);
+    const status = check.ok ?
+      '<span style="color:var(--z1);">✓ OK</span>' :
+      `<span class="warn">${check.issues.join('; ')}</span>`;
+
+    html += `<tr>
+      <td>${i+1}</td>
+      <td>${w.type}</td>
+      <td>${(sim.avgSpeed * 3.6).toFixed(1)} km/h</td>
+      <td>${check.cadenceRange[0].toFixed(0)} RPM</td>
+      <td>${check.cadenceRange[1].toFixed(0)} RPM</td>
+      <td>${check.requiredGearAtMinCad.toFixed(2)} – ${check.requiredGearAtMaxCad.toFixed(2)}</td>
+      <td>${status}</td>
+    </tr>`;
+  });
+
+  html += '</table>';
+
+  // Also check extremes on route
+  const extremeGrades = routeData.points.filter(p => Math.abs(p.grade) > 8);
+  if (extremeGrades.length > 0) {
+    html += `<div style="margin-top:1rem; font-size:.82rem; color:var(--mid);">
+      <strong>⚠ Steep sections on route:</strong> ${extremeGrades.length} points with grade > 8%.
+      Consider your lowest gear for sustained climbing.
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+function setTuneTab(name) { switchTab('#step4Panel', name); }
+
+// =====================================================================
+//  EXPORT
+// =====================================================================
+function initExport() {
+  renderExportSummary();
+  renderZwoExport();
+  renderMrcExport();
+  renderTextExport();
+}
+
+function renderExportSummary() {
+  const el = document.getElementById('exportSummary');
+  const ftp = parseFloat(document.getElementById('ftpInput').value) || 250;
+
+  if (!rideSimulation.length) {
+    simulateRide();
+  }
+
+  const totalTime = rideSimulation.length > 0 ? rideSimulation[rideSimulation.length - 1].endTime : 0;
+  const totalDist = rideSimulation.length > 0 ? rideSimulation[rideSimulation.length - 1].endDist : 0;
+
+  const tss = workout.reduce((s, w) => {
+    const np = ftp * w.powerPct / 100;
+    const IF_ = np / ftp;
+    return s + (w.durationSec * np * IF_) / (ftp * 3600) * 100;
+  }, 0);
+
+  let html = `<div class="route-stats" style="margin-bottom:1.5rem;">
+    <div class="stat"><span class="stat-label">Total time</span><span class="stat-value">${formatTime(totalTime)}</span></div>
+    <div class="stat"><span class="stat-label">Est. distance</span><span class="stat-value">${(totalDist/1000).toFixed(1)} km</span></div>
+    <div class="stat"><span class="stat-label">TSS</span><span class="stat-value">${tss.toFixed(0)}</span></div>
+    <div class="stat"><span class="stat-label">FTP</span><span class="stat-value">${ftp}W</span></div>
+  </div>`;
+
+  // Visual workout bar
+  html += '<div style="display:flex; height:40px; border-radius:3px; overflow:hidden; border:1px solid var(--border); margin-bottom:1.5rem;">';
+  const totalSec = workout.reduce((s, w) => s + w.durationSec, 0);
+  workout.forEach(w => {
+    const pct = (w.durationSec / totalSec * 100).toFixed(1);
+    const zc = zoneColor(w.zone);
+    html += `<div style="width:${pct}%; background:${zc.bg}; border-right:1px solid ${zc.border}; display:flex; align-items:center; justify-content:center; font-size:.6rem; font-weight:600; color:${zc.border}; overflow:hidden; white-space:nowrap;" title="${w.type} ${w.powerPct}% ${formatTime(w.durationSec)}">
+      ${pct > 5 ? `${w.powerPct}%` : ''}
+    </div>`;
+  });
+  html += '</div>';
+
+  // Interval list
+  html += '<table class="gear-table"><tr><th>#</th><th>Type</th><th>Time</th><th>Power</th><th>Zone</th><th>Distance</th></tr>';
+  rideSimulation.forEach((sim, i) => {
+    const w = sim.interval;
+    const zc = zoneColor(w.zone);
+    html += `<tr>
+      <td>${i+1}</td>
+      <td>${w.type}</td>
+      <td>${formatTime(w.durationSec)}</td>
+      <td>${w.powerPct}% (${Math.round(ftp * w.powerPct / 100)}W)</td>
+      <td><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:${zc.border}; margin-right:.3rem;"></span>${zc.text}</td>
+      <td>${((sim.endDist - sim.startDist)/1000).toFixed(2)} km</td>
+    </tr>`;
+  });
+  html += '</table>';
+
+  el.innerHTML = html;
+}
+
+function renderZwoExport() {
+  const ftp = parseFloat(document.getElementById('ftpInput').value) || 250;
+  let zwo = `<?xml version="1.0" encoding="UTF-8"?>
+<workout_file>
+  <author>Workout Route Tuner</author>
+  <name>Tuned Workout</name>
+  <description>Workout tuned to route via tools.andyreagan.com</description>
+  <sportType>bike</sportType>
+  <workout>
+`;
+
+  workout.forEach(w => {
+    const power = (w.powerPct / 100).toFixed(2);
+    const dur = w.durationSec;
+    const tag = w.type === 'warmup' ? 'Warmup' :
+                w.type === 'cooldown' ? 'Cooldown' :
+                w.type === 'rest' ? 'FreeRide' :
+                w.type === 'recovery' ? 'SteadyState' : 'SteadyState';
+    if (tag === 'Warmup' || tag === 'Cooldown') {
+      zwo += `    <${tag} Duration="${dur}" PowerLow="${(w.powerPct * 0.8 / 100).toFixed(2)}" PowerHigh="${power}"/>\n`;
+    } else if (tag === 'FreeRide') {
+      zwo += `    <FreeRide Duration="${dur}" FlatRoad="1"/>\n`;
+    } else {
+      zwo += `    <SteadyState Duration="${dur}" Power="${power}"/>\n`;
+    }
+  });
+
+  zwo += `  </workout>
+</workout_file>`;
+
+  document.getElementById('zwoPreview').textContent = zwo;
+}
+
+function renderMrcExport() {
+  const ftp = parseFloat(document.getElementById('ftpInput').value) || 250;
+  let mrc = `[COURSE HEADER]
+VERSION = 2
+UNITS = ENGLISH
+DESCRIPTION = Tuned Workout
+FILE NAME = tuned_workout
+FTP = ${ftp}
+MINUTES PERCENT
+[END COURSE HEADER]
+[COURSE DATA]
+`;
+
+  let elapsed = 0;
+  workout.forEach(w => {
+    const pct = w.powerPct;
+    mrc += `${(elapsed / 60).toFixed(2)}\t${pct}\n`;
+    elapsed += w.durationSec;
+    mrc += `${(elapsed / 60).toFixed(2)}\t${pct}\n`;
+  });
+
+  mrc += `[END COURSE DATA]`;
+
+  document.getElementById('mrcPreview').textContent = mrc;
+}
+
+function renderTextExport() {
+  const ftp = parseFloat(document.getElementById('ftpInput').value) || 250;
+  let text = `# Workout Route Tuner — Tuned Workout\n`;
+  text += `# FTP: ${ftp}W\n`;
+  text += `# Generated: ${new Date().toISOString().split('T')[0]}\n\n`;
+  text += `# Type\tDuration\tPower %\tPower W\tNotes\n`;
+
+  workout.forEach(w => {
+    text += `${w.type}\t${formatTime(w.durationSec)}\t${w.powerPct}%\t${Math.round(ftp * w.powerPct / 100)}W\t${w.notes}\n`;
+  });
+
+  if (rideSimulation.length > 0) {
+    text += `\n# Route mapping:\n`;
+    text += `# #\tStart km\tEnd km\tAvg Speed\tNotes\n`;
+    rideSimulation.forEach((sim, i) => {
+      const notes = sim.conflicts.map(c => c.msg).join('; ') || 'OK';
+      text += `# ${i+1}\t${(sim.startDist/1000).toFixed(2)}\t${(sim.endDist/1000).toFixed(2)}\t${(sim.avgSpeed*3.6).toFixed(1)} km/h\t${notes}\n`;
+    });
+  }
+
+  document.getElementById('textPreview').textContent = text;
+}
+
+function downloadExport(format) {
+  let content, filename, mime;
+  if (format === 'zwo') {
+    content = document.getElementById('zwoPreview').textContent;
+    filename = 'tuned_workout.zwo';
+    mime = 'application/xml';
+  } else if (format === 'mrc') {
+    content = document.getElementById('mrcPreview').textContent;
+    filename = 'tuned_workout.mrc';
+    mime = 'text/plain';
+  } else {
+    content = document.getElementById('textPreview').textContent;
+    filename = 'tuned_workout.txt';
+    mime = 'text/plain';
+  }
+
+  const blob = new Blob([content], {type: mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function setExportTab(name) { switchTab('#step5Panel', name); }
+
+// =====================================================================
+//  IMPORT CALIBRATED VALUES FROM URL
+// =====================================================================
+function importFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  let imported = false;
+  if (params.has('cda')) {
+    document.getElementById('cdaInput').value = params.get('cda');
+    imported = true;
+  }
+  if (params.has('crr')) {
+    document.getElementById('crrInput').value = params.get('crr');
+    imported = true;
+  }
+  if (params.has('weight')) {
+    document.getElementById('weightInput').value = params.get('weight');
+    imported = true;
+  }
+  if (params.has('bike')) {
+    document.getElementById('bikeWeightInput').value = params.get('bike');
+    imported = true;
+  }
+  if (imported) {
+    // Show a little banner
+    const banner = document.createElement('div');
+    banner.style.cssText = 'background:#e8f5e9; border:1px solid #4caf50; border-radius:3px; padding:.5rem .75rem; font-size:.82rem; color:#2e7d32; margin-bottom:1rem; position:relative; z-index:1;';
+    banner.innerHTML = '✅ Imported calibrated values from Riding Physics Estimator (CdA=' + (params.get('cda') || '') + ', Crr=' + (params.get('crr') || '') + ')';
+    document.querySelector('.page').insertBefore(banner, document.getElementById('step1Panel'));
+    // Clean URL
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+}
+
+// =====================================================================
+//  SETTINGS PERSISTENCE (sessionStorage)
+// =====================================================================
+const PERSIST_FIELDS = [
+  {id: 'ftpInput',         key: 'rider.ftp'},
+  {id: 'weightInput',      key: 'rider.weight'},
+  {id: 'bikeWeightInput',  key: 'rider.bikeWeight'},
+  {id: 'cdaInput',         key: 'rider.cda'},
+  {id: 'crrInput',         key: 'rider.crr'},
+  {id: 'windSpeedInput',   key: 'rider.windSpeed'},
+  {id: 'windDirInput',     key: 'rider.windDir'},
+  {id: 'minCadenceInput',  key: 'rider.minCadence'},
+  {id: 'maxCadenceInput',  key: 'rider.maxCadence'},
+  {id: 'maxGearInput',     key: 'rider.maxGear'},
+  {id: 'minGearInput',     key: 'rider.minGear'},
+  {id: 'wheelCircInput',   key: 'rider.wheelCirc'},
+];
+
+function loadSettings() {
+  for (const f of PERSIST_FIELDS) {
+    const val = sessionStorage.getItem(f.key);
+    if (val !== null) {
+      const el = document.getElementById(f.id);
+      if (el) el.value = val;
+    }
+  }
+}
+
+function saveSettings() {
+  for (const f of PERSIST_FIELDS) {
+    const el = document.getElementById(f.id);
+    if (el) sessionStorage.setItem(f.key, el.value);
+  }
+}
+
+function initSettingsPersistence() {
+  // Save on any input change
+  for (const f of PERSIST_FIELDS) {
+    const el = document.getElementById(f.id);
+    if (el) {
+      el.addEventListener('change', saveSettings);
+      el.addEventListener('input', saveSettings);
+    }
+  }
+}
+
+// =====================================================================
+//  INIT
+// =====================================================================
+loadSettings();     // Restore from sessionStorage first
+importFromUrl();    // Then override with URL params (takes priority)
+setupDropZone();
+initSettingsPersistence();
+
+</script>
+<script src="/footer.js"></script>
+</body>
+</html>

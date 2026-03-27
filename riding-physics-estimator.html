@@ -1,0 +1,1779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Riding Physics Estimator — Andy's Toolbox</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <!-- FIT SDK for .fit file parsing -->
+  <script type="module">
+    import { Decoder, Stream } from 'https://cdn.jsdelivr.net/npm/@garmin/fitsdk@21.171.0/+esm';
+    window.FitDecoder = Decoder;
+    window.FitStream = Stream;
+    window.dispatchEvent(new Event('fitsdk-ready'));
+  </script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+      --mid:#666; --muted:#999; --border:#ddd; --accent:#e74c3c;
+      --green:#4caf50; --blue:#2196f3; --orange:#ff9800;
+    }
+    body{
+      font-family:system-ui,sans-serif;
+      background:var(--bg); color:var(--dark);
+      min-height:100vh; padding:1.5rem;
+    }
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0;
+      background-image:repeating-linear-gradient(
+        45deg, transparent, transparent 20px,
+        rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+      );
+    }
+    .page{max-width:1000px; margin:0 auto; position:relative; z-index:1;}
+
+    header{margin-bottom:2rem;}
+    .back{
+      font-size:.75rem; font-weight:600; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted);
+      text-decoration:none; display:inline-block; margin-bottom:1rem;
+    }
+    .back:hover{color:var(--accent);}
+    h1{
+      font-size:clamp(1.6rem,5vw,2.5rem); font-weight:800;
+      text-transform:uppercase; letter-spacing:.02em; line-height:1.1;
+      margin-bottom:.5rem;
+    }
+    .subtitle{font-size:.9rem; color:var(--mid); line-height:1.6; max-width:700px;}
+
+    .card{
+      background:var(--surface); border:2px solid var(--dark);
+      border-radius:4px; padding:1.5rem; margin-bottom:1.5rem;
+    }
+    .card h2{
+      font-size:.75rem; font-weight:700; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted); margin-bottom:1rem;
+    }
+    .card h3{
+      font-size:.85rem; font-weight:700; margin-bottom:.75rem;
+    }
+
+    input, select, textarea{
+      font-size:.9rem; padding:.4rem .6rem;
+      border:2px solid var(--border); border-radius:3px;
+      background:#fafafa; color:var(--dark); font-family:system-ui,sans-serif;
+    }
+    input:focus, select:focus, textarea:focus{
+      outline:none; border-color:var(--dark);
+    }
+    label{
+      font-size:.75rem; font-weight:600; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--muted); display:block;
+      margin-bottom:.3rem;
+    }
+
+    .btn{
+      font-size:.8rem; font-weight:600; letter-spacing:.05em;
+      text-transform:uppercase; padding:.5rem 1rem;
+      border:2px solid var(--dark); border-radius:3px;
+      background:transparent; color:var(--dark); cursor:pointer;
+      transition:all .15s;
+    }
+    .btn:hover{background:var(--dark); color:#fff;}
+    .btn.active{background:var(--dark); color:#fff;}
+    .btn.small{font-size:.7rem; padding:.35rem .7rem;}
+    .btn.accent{border-color:var(--accent); color:var(--accent);}
+    .btn.accent:hover{background:var(--accent); color:#fff;}
+    .btn:disabled{opacity:.4; cursor:not-allowed;}
+
+    .btn-row{display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:1rem;}
+
+    .form-group{margin-bottom:.75rem;}
+    .form-row{display:flex; gap:.75rem; align-items:end; flex-wrap:wrap;}
+    .form-row .form-group{margin-bottom:0;}
+
+    .route-stats{display:flex; gap:1.5rem; flex-wrap:wrap; margin-bottom:1rem;}
+    .stat{display:flex; flex-direction:column;}
+    .stat-label{font-size:.65rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);}
+    .stat-value{font-size:1.2rem; font-weight:700;}
+    .stat-value.big{font-size:2rem;}
+
+    .drop-zone{
+      border:2px dashed var(--border); border-radius:4px;
+      padding:2rem; text-align:center; cursor:pointer;
+      transition:all .2s; margin-bottom:1rem;
+    }
+    .drop-zone:hover, .drop-zone.dragover{
+      border-color:var(--dark); background:#fafafa;
+    }
+    .drop-zone p{font-size:.85rem; color:var(--mid);}
+    .drop-zone .hint{font-size:.7rem; color:var(--muted); margin-top:.3rem;}
+    .drop-zone input[type="file"]{display:none;}
+
+    .chart-wrap{position:relative; height:220px; margin-bottom:1rem;}
+    .chart-wrap canvas{width:100%!important; height:100%!important;}
+
+    #calMap{height:300px; border-radius:3px; border:1px solid var(--border); margin-bottom:1rem;}
+
+    .result-box{
+      border:2px solid var(--dark); border-radius:4px;
+      padding:1.5rem; background:#fafafa; margin-bottom:1rem;
+    }
+    .result-box.success{border-color:var(--green); background:#f0faf0;}
+    .result-box.warn{border-color:var(--orange); background:#fffaf0;}
+
+    .gear-table{width:100%; border-collapse:collapse; font-size:.82rem;}
+    .gear-table th{
+      font-weight:600; font-size:.65rem; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--muted);
+      text-align:left; padding:.4rem .5rem;
+      border-bottom:2px solid var(--border);
+    }
+    .gear-table td{padding:.4rem .5rem; border-bottom:1px solid var(--border);}
+
+    .note{
+      font-size:.72rem; color:var(--muted); line-height:1.5;
+      border-left:3px solid var(--border); padding-left:.75rem;
+      margin-top:1rem;
+    }
+
+    .progress{
+      width:100%; height:6px; background:var(--border); border-radius:3px;
+      overflow:hidden; margin:.5rem 0;
+    }
+    .progress-bar{height:100%; background:var(--green); border-radius:3px; transition:width .3s;}
+
+    .range-bar{
+      display:flex; align-items:center; gap:.5rem; margin:.5rem 0;
+    }
+    .range-track{
+      flex:1; height:8px; background:var(--border); border-radius:4px;
+      position:relative;
+    }
+    .range-fill{
+      height:100%; border-radius:4px; position:absolute; top:0;
+    }
+    .range-marker{
+      width:3px; height:14px; background:var(--dark); border-radius:2px;
+      position:absolute; top:-3px; transform:translateX(-50%);
+    }
+    .range-label{font-size:.7rem; color:var(--muted); white-space:nowrap; min-width:60px;}
+
+    /* Sensitivity chart */
+    .sensitivity-grid{
+      display:grid; grid-template-columns:1fr 1fr; gap:1rem;
+      margin-bottom:1rem;
+    }
+    @media(max-width:600px){.sensitivity-grid{grid-template-columns:1fr;}}
+
+    .pill{
+      display:inline-block; font-size:.65rem; font-weight:600;
+      letter-spacing:.08em; text-transform:uppercase;
+      padding:.2rem .6rem; border-radius:10px;
+      margin-right:.3rem;
+    }
+    .pill.good{background:#e8f5e9; color:#2e7d32;}
+    .pill.ok{background:#fff3e0; color:#e65100;}
+    .pill.poor{background:#ffebee; color:#c62828;}
+
+    .warning-box{
+      background:#fff3cd; border:1px solid #ffc107; border-radius:3px;
+      padding:.5rem .75rem; font-size:.82rem; color:#856404;
+      margin-bottom:.75rem;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <a class="back" href="/">← Back to Toolbox</a>
+    <h1>Riding Physics Estimator</h1>
+    <p class="subtitle">
+      Upload a ride with power data to estimate your CdA (aerodynamic drag area)
+      and Crr (rolling resistance). Uses the same physics model as the
+      <a href="workout-route-tuner.html" style="color:var(--accent);">Workout Route Tuner</a>.
+    </p>
+  </header>
+
+  <!-- ============ STEP 1: Upload Ride ============ -->
+  <div class="card">
+    <h2>1. Upload a Ride with Power Data</h2>
+    <div class="drop-zone" id="rideDropZone">
+      <p>Drop a <strong>.fit</strong>, <strong>.gpx</strong>, or <strong>.tcx</strong> file here or click to browse</p>
+      <div class="hint">
+        Needs GPS, elevation, and power data. <strong>.fit</strong> (Garmin raw) is recommended — it always
+        has power. Garmin's .gpx export strips power; use Strava's .gpx or the .tcx export instead.
+      </div>
+      <input type="file" id="rideFileInput" accept=".gpx,.tcx,.fit,.FIT">
+    </div>
+    <div class="btn-row">
+      <button class="btn small" onclick="loadDemoRide()">Load demo ride</button>
+    </div>
+    <div id="uploadStatus"></div>
+  </div>
+
+  <!-- ============ STEP 2: Conditions ============ -->
+  <div class="card" id="conditionsCard" style="display:none;">
+    <h2>2. Ride Conditions</h2>
+
+    <p style="font-size:.82rem; color:var(--mid); margin-bottom:1rem;">
+      Enter the conditions during the ride. We assume temperature, pressure, and wind
+      were roughly constant. Wind direction and speed are the biggest unknowns — if you
+      rode a loop, the wind effects tend to cancel out and you can leave wind at 0.
+    </p>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Rider + clothing (kg)</label>
+        <input type="number" id="calRiderMass" value="75" min="30" max="200" step="0.5" style="width:90px;">
+      </div>
+      <div class="form-group">
+        <label>Bike + bottles (kg)</label>
+        <input type="number" id="calBikeMass" value="9" min="3" max="25" step="0.5" style="width:90px;">
+      </div>
+      <div class="form-group">
+        <label>Temperature (°C)</label>
+        <input type="number" id="calTemp" value="20" min="-20" max="50" step="1" style="width:80px;">
+      </div>
+      <div class="form-group">
+        <label>Elevation (m)</label>
+        <input type="number" id="calAltitude" value="100" min="0" max="4000" step="50" style="width:80px;">
+        <div style="font-size:.65rem; color:var(--muted); margin-top:.15rem;">Avg elevation for air density</div>
+      </div>
+    </div>
+
+    <div class="form-row" style="margin-top:.75rem;">
+      <div class="form-group">
+        <label>Wind speed (km/h)</label>
+        <input type="number" id="calWindSpeed" value="0" min="0" max="80" step="1" style="width:80px;">
+      </div>
+      <div class="form-group">
+        <label>Wind from (°)</label>
+        <input type="number" id="calWindDir" value="0" min="0" max="359" step="1" style="width:80px;">
+        <div style="font-size:.65rem; color:var(--muted); margin-top:.15rem;">0=N 90=E 180=S 270=W</div>
+      </div>
+      <div class="form-group">
+        <label>Drivetrain loss (%)</label>
+        <input type="number" id="calDrivetrainLoss" value="3" min="0" max="10" step="0.5" style="width:80px;">
+        <div style="font-size:.65rem; color:var(--muted); margin-top:.15rem;">Typical: 2-4%</div>
+      </div>
+    </div>
+
+    <hr style="border:none; border-top:1px solid var(--border); margin:1.25rem 0;">
+
+    <h3>Filtering Options</h3>
+    <p style="font-size:.82rem; color:var(--mid); margin-bottom:.75rem;">
+      The solver works best with steady-state data. Filter out stops, accelerations,
+      and coasting to get cleaner estimates.
+    </p>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Min speed (km/h)</label>
+        <input type="number" id="calMinSpeed" value="12" min="0" max="30" step="1" style="width:80px;">
+        <div style="font-size:.65rem; color:var(--muted); margin-top:.15rem;">Exclude stops / crawling</div>
+      </div>
+      <div class="form-group">
+        <label>Max speed (km/h)</label>
+        <input type="number" id="calMaxSpeed" value="60" min="20" max="100" step="1" style="width:80px;">
+        <div style="font-size:.65rem; color:var(--muted); margin-top:.15rem;">Exclude descents / drafting</div>
+      </div>
+      <div class="form-group">
+        <label>Min power (W)</label>
+        <input type="number" id="calMinPower" value="50" min="0" max="200" step="10" style="width:80px;">
+        <div style="font-size:.65rem; color:var(--muted); margin-top:.15rem;">Exclude coasting</div>
+      </div>
+      <div class="form-group">
+        <label>Max grade (%)</label>
+        <input type="number" id="calMaxGrade" value="12" min="3" max="25" step="1" style="width:80px;">
+        <div style="font-size:.65rem; color:var(--muted); margin-top:.15rem;">Exclude extreme grades</div>
+      </div>
+      <div class="form-group">
+        <label>Max accel (m/s²)</label>
+        <input type="number" id="calMaxAccel" value="0.5" min="0.1" max="3" step="0.1" style="width:80px;">
+        <div style="font-size:.65rem; color:var(--muted); margin-top:.15rem;">Exclude non-steady-state</div>
+      </div>
+    </div>
+
+    <div class="form-row" style="margin-top:.75rem;">
+      <div class="form-group">
+        <label>Power→speed lag (s)</label>
+        <input type="number" id="calPowerLag" value="0" min="0" max="15" step="1" style="width:80px;">
+        <div style="font-size:.65rem; color:var(--muted); margin-top:.15rem;">
+          Power is measured instantly at the crank, but it takes time for the bike
+          to accelerate to a new speed. Try 3–5 s if your R² is low.
+        </div>
+      </div>
+      <div class="form-group" style="align-self:end;">
+        <button class="btn small" onclick="autoDetectLag()">Auto-detect best lag</button>
+      </div>
+    </div>
+
+    <div style="margin-top:1rem;">
+      <button class="btn" onclick="runCalibration()">Run Estimation →</button>
+    </div>
+  </div>
+
+  <!-- ============ STEP 3: Results ============ -->
+  <div class="card" id="resultsCard" style="display:none;">
+    <h2>3. Results</h2>
+
+    <!-- Ride overview -->
+    <div id="calMap"></div>
+    <div class="route-stats" id="rideStats"></div>
+
+    <hr style="border:none; border-top:1px solid var(--border); margin:1.25rem 0;">
+
+    <!-- Estimated parameters -->
+    <div id="estimateResults"></div>
+
+    <hr style="border:none; border-top:1px solid var(--border); margin:1.25rem 0;">
+
+    <!-- Quality of fit -->
+    <h3>Fit Quality</h3>
+    <div id="fitQuality"></div>
+
+    <!-- Residuals chart -->
+    <div class="sensitivity-grid">
+      <div>
+        <h3 style="font-size:.75rem;">Predicted vs Actual Speed</h3>
+        <div class="chart-wrap" style="height:200px;">
+          <canvas id="scatterChart"></canvas>
+        </div>
+      </div>
+      <div>
+        <h3 style="font-size:.75rem;">Residuals by Speed</h3>
+        <div class="chart-wrap" style="height:200px;">
+          <canvas id="residualChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="sensitivity-grid">
+      <div>
+        <h3 style="font-size:.75rem;">Power vs Speed (colored by grade)</h3>
+        <div class="chart-wrap" style="height:200px;">
+          <canvas id="powerSpeedChart"></canvas>
+        </div>
+      </div>
+      <div>
+        <h3 style="font-size:.75rem;">RMSE Sensitivity to CdA</h3>
+        <div class="chart-wrap" style="height:95px;">
+          <canvas id="sensitivityCdaChart"></canvas>
+        </div>
+        <h3 style="font-size:.75rem; margin-top:.5rem;">RMSE Sensitivity to Crr</h3>
+        <div class="chart-wrap" style="height:95px;">
+          <canvas id="sensitivityCrrChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <hr style="border:none; border-top:1px solid var(--border); margin:1.25rem 0;">
+
+    <!-- Reference ranges -->
+    <h3>Reference Ranges</h3>
+    <div id="referenceRanges"></div>
+
+    <hr style="border:none; border-top:1px solid var(--border); margin:1.25rem 0;">
+
+    <!-- Export to Workout Route Tuner -->
+    <h3>Use These Values</h3>
+    <div id="exportValues"></div>
+  </div>
+
+  <!-- ============ How it works ============ -->
+  <div class="card">
+    <h2>How It Works</h2>
+    <div style="font-size:.85rem; color:var(--mid); line-height:1.7;">
+      <p style="margin-bottom:1rem;">
+        <strong>The physics:</strong> At each data point in your ride, the power meter records
+        power <em>P</em>, GPS gives speed <em>v</em> and grade <em>θ</em>. The relationship is:
+      </p>
+      <div style="background:#fafafa; border:1px solid var(--border); border-radius:3px; padding:.75rem; font-family:monospace; font-size:.82rem; margin-bottom:1rem; overflow-x:auto;">
+        P = [ ½·ρ·CdA·(v + v_wind)²  +  Crr·m·g·cos(θ)  +  m·g·sin(θ) ] · v
+      </div>
+      <p style="margin-bottom:1rem;">
+        Rearranging: <strong>P/v − m·g·sin(θ) = ½·ρ·(v+v_wind)²·CdA + m·g·cos(θ)·Crr</strong>
+      </p>
+      <p style="margin-bottom:1rem;">
+        This is linear in <strong>CdA</strong> and <strong>Crr</strong>! With hundreds of data
+        points, we solve the overdetermined system using
+        <a href="https://en.wikipedia.org/wiki/Ordinary_least_squares" style="color:var(--accent);" target="_blank">ordinary least squares</a>.
+        The known quantities at each point are power, speed, grade, air density, mass, and
+        headwind (computed from wind speed/direction and the rider's GPS heading).
+      </p>
+      <p style="margin-bottom:1rem;">
+        <strong>Wind model:</strong> Wind blows from a fixed compass direction at constant speed.
+        At each GPS point, we compute the route bearing and project the wind vector to get the
+        headwind component. On a loop, headwind and tailwind sections roughly cancel, so setting
+        wind to 0 is often fine.
+      </p>
+      <p style="margin-bottom:1rem;">
+        <strong>Air density:</strong> Computed from temperature and elevation using the
+        barometric formula: ρ = 1.225 · (1 − 0.0000226·altitude)^5.256 · (288.15 / (273.15+T)).
+      </p>
+      <p style="margin-bottom:1rem;">
+        <strong>Acceleration correction:</strong> The basic equation assumes steady state, but
+        riders accelerate and decelerate constantly. We compute acceleration from the speed trace
+        and subtract the inertial force <em>m·a</em> from the left-hand side. Points with
+        acceleration above the threshold are also filtered out entirely.
+      </p>
+      <p style="margin-bottom:1rem;">
+        <strong>Power→speed lag:</strong> Power is measured instantly at the crank, but it takes
+        time for drag and rolling resistance to reach a new equilibrium speed. This mismatch adds
+        noise. The "lag" setting shifts power data backwards in time before fitting. Use
+        "Auto-detect" to find the lag that maximizes R². Typical values are 0–5 seconds.
+      </p>
+      <p style="margin-bottom:1rem;">
+        <strong>File formats:</strong> <strong>.fit</strong> is the native Garmin binary format
+        and always includes power. Garmin Connect <em>strips power from .gpx exports</em>
+        — use the .tcx or .fit export instead. Strava's .gpx export does include power.
+      </p>
+      <p style="margin-bottom:1rem;">
+        <strong>Filtering:</strong> We exclude data points where the rider is stopped, coasting
+        (low power), accelerating hard, or on extreme grades. These non-steady-state points add
+        noise. The more steady riding data you have, the better the estimate.
+      </p>
+      <p>
+        <strong>Accuracy:</strong> This method is well-established in cycling science (Chung's
+        Virtual Elevation protocol, Martin et al. 1998). With a good power meter, clean GPS, and
+        moderate wind, expect CdA accuracy within ±5–10% and Crr within ±20%. A velodrome or
+        flat, windless time-trial gives the best results.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+//  STATE
+// =====================================================================
+const G = 9.81;
+let rideData = null;   // {points: [{lat,lon,ele,dist,speed,power,time,grade,bearing}], ...}
+let calResult = null;  // {cda, crr, r2, rmse, usedPoints, ...}
+let calCharts = {};    // chart instances
+
+// =====================================================================
+//  AIR DENSITY
+// =====================================================================
+function airDensity(tempC, altitudeM) {
+  // ISA model: pressure drops with altitude, correct for temperature
+  const T = 273.15 + tempC;
+  const p0 = 101325; // sea level Pa
+  const p = p0 * Math.pow(1 - 0.0000226 * altitudeM, 5.256);
+  const R = 287.05; // specific gas constant for dry air
+  return p / (R * T);
+}
+
+// =====================================================================
+//  GPX PARSING (with power + speed)
+// =====================================================================
+function setupDropZone() {
+  const zone = document.getElementById('rideDropZone');
+  const input = document.getElementById('rideFileInput');
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) handleRideFile(e.dataTransfer.files[0]);
+  });
+  input.addEventListener('change', () => {
+    if (input.files.length) handleRideFile(input.files[0]);
+  });
+}
+
+function handleRideFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+
+  if (ext === 'fit') {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        parseRideFIT(e.target.result);
+        finishLoad();
+      } catch (err) {
+        showStatus('❌ Error parsing FIT: ' + err.message, 'bad');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    // GPX or TCX — text-based
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        if (ext === 'tcx') {
+          parseRideTCX(e.target.result);
+        } else {
+          parseRideGPX(e.target.result);
+        }
+        finishLoad();
+      } catch (err) {
+        showStatus('❌ Error: ' + err.message, 'bad');
+      }
+    };
+    reader.readAsText(file);
+  }
+}
+
+function finishLoad() {
+  showStatus(`✅ Loaded ${rideData.points.length} points, ${rideData.pointsWithPower} with power data.`, 'good');
+  document.getElementById('conditionsCard').style.display = '';
+  const avgEle = rideData.points.reduce((s, p) => s + p.ele, 0) / rideData.points.length;
+  document.getElementById('calAltitude').value = Math.round(avgEle);
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById('uploadStatus');
+  const bg = type === 'good' ? '#e8f5e9' : type === 'bad' ? '#ffebee' : '#fff3e0';
+  const color = type === 'good' ? '#2e7d32' : type === 'bad' ? '#c62828' : '#e65100';
+  el.innerHTML = `<div style="padding:.5rem .75rem; border-radius:3px; font-size:.82rem; background:${bg}; color:${color}; margin-top:.5rem;">${msg}</div>`;
+}
+
+function parseRideGPX(xml) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'text/xml');
+
+  let trkpts = doc.querySelectorAll('trkpt');
+  if (trkpts.length === 0) throw new Error('No track points found');
+
+  const points = [];
+  let totalDist = 0;
+  let pointsWithPower = 0;
+
+  trkpts.forEach((pt, i) => {
+    const lat = parseFloat(pt.getAttribute('lat'));
+    const lon = parseFloat(pt.getAttribute('lon'));
+    const eleEl = pt.querySelector('ele');
+    const ele = eleEl ? parseFloat(eleEl.textContent) : 0;
+
+    // Time
+    const timeEl = pt.querySelector('time');
+    const time = timeEl ? new Date(timeEl.textContent).getTime() / 1000 : i;
+
+    // Power — look in extensions
+    let power = null;
+    const powerEl = pt.querySelector('power') ||
+                    pt.querySelector('extensions power') ||
+                    pt.querySelector('[nodeName="power"]');
+    if (powerEl) {
+      power = parseFloat(powerEl.textContent);
+      if (!isNaN(power)) pointsWithPower++;
+      else power = null;
+    }
+    // Also try Garmin TrackPointExtension ns3:power or gpxtpx:power
+    if (power === null) {
+      const exts = pt.querySelector('extensions');
+      if (exts) {
+        // Try various namespace patterns
+        const allEls = exts.getElementsByTagName('*');
+        for (let j = 0; j < allEls.length; j++) {
+          const localName = allEls[j].localName || allEls[j].nodeName.split(':').pop();
+          if (localName === 'power' || localName === 'watts' || localName === 'Watts') {
+            const v = parseFloat(allEls[j].textContent);
+            if (!isNaN(v) && v >= 0) { power = v; pointsWithPower++; break; }
+          }
+        }
+      }
+    }
+
+    // Speed from GPS (computed, not from extensions — more reliable for our purposes)
+    let speed = 0;
+    if (i > 0) {
+      const prev = points[i - 1];
+      const d = haversine(prev.lat, prev.lon, lat, lon);
+      totalDist += d;
+      const dt = time - prev.time;
+      speed = dt > 0 ? d / dt : 0;
+    }
+
+    points.push({ lat, lon, ele, dist: totalDist, time, power, speed });
+  });
+
+  if (pointsWithPower === 0) {
+    throw new Error(
+      'No power data found in GPX. Garmin Connect strips power from GPX exports. ' +
+      'Use the .fit file, .tcx export, or download GPX from Strava instead.'
+    );
+  }
+
+  finalizeRideData(points, pointsWithPower, totalDist);
+}
+
+// =====================================================================
+//  TCX PARSING
+// =====================================================================
+function parseRideTCX(xml) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'text/xml');
+
+  const trackpoints = doc.querySelectorAll('Trackpoint');
+  if (trackpoints.length === 0) throw new Error('No Trackpoints found in TCX');
+
+  const points = [];
+  let totalDist = 0;
+  let pointsWithPower = 0;
+
+  trackpoints.forEach((tp, i) => {
+    const posEl = tp.querySelector('Position');
+    if (!posEl) return; // skip points without GPS
+
+    const lat = parseFloat(posEl.querySelector('LatitudeDegrees').textContent);
+    const lon = parseFloat(posEl.querySelector('LongitudeDegrees').textContent);
+    const altEl = tp.querySelector('AltitudeMeters');
+    const ele = altEl ? parseFloat(altEl.textContent) : 0;
+
+    const timeEl = tp.querySelector('Time');
+    const time = timeEl ? new Date(timeEl.textContent).getTime() / 1000 : i;
+
+    // Power from extensions — Garmin TCX uses ns3:Watts
+    let power = null;
+    const exts = tp.querySelector('Extensions');
+    if (exts) {
+      const allEls = exts.getElementsByTagName('*');
+      for (let j = 0; j < allEls.length; j++) {
+        const localName = allEls[j].localName || allEls[j].nodeName.split(':').pop();
+        if (localName === 'Watts' || localName === 'watts' || localName === 'power') {
+          const v = parseFloat(allEls[j].textContent);
+          if (!isNaN(v) && v >= 0) { power = v; pointsWithPower++; break; }
+        }
+      }
+    }
+
+    // Speed: use distance field if available, else compute from GPS
+    let speed = 0;
+    if (i > 0 && points.length > 0) {
+      const prev = points[points.length - 1];
+      const d = haversine(prev.lat, prev.lon, lat, lon);
+      totalDist += d;
+      const dt = time - prev.time;
+      speed = dt > 0 ? d / dt : 0;
+    }
+
+    points.push({ lat, lon, ele, dist: totalDist, time, power, speed });
+  });
+
+  if (pointsWithPower === 0) {
+    throw new Error('No power data found in TCX file.');
+  }
+
+  finalizeRideData(points, pointsWithPower, totalDist);
+}
+
+// =====================================================================
+//  FIT PARSING
+// =====================================================================
+function parseRideFIT(arrayBuffer) {
+  if (!window.FitDecoder || !window.FitStream) {
+    throw new Error('FIT SDK not loaded yet. Please wait a moment and try again.');
+  }
+
+  const stream = new window.FitStream(new Uint8Array(arrayBuffer));
+  const decoder = new window.FitDecoder(stream);
+  const { messages } = decoder.read();
+
+  const records = messages.recordMesgs || [];
+  if (records.length === 0) throw new Error('No record messages found in FIT file');
+
+  const points = [];
+  let totalDist = 0;
+  let pointsWithPower = 0;
+
+  for (let i = 0; i < records.length; i++) {
+    const r = records[i];
+
+    // Position: stored in semicircles
+    const latSc = r.positionLat;
+    const lonSc = r.positionLong;
+    if (latSc == null || lonSc == null) continue;
+
+    const lat = latSc * (180 / 2147483648);
+    const lon = lonSc * (180 / 2147483648);
+    const ele = r.enhancedAltitude ?? r.altitude ?? 0;
+
+    // Timestamp
+    const ts = r.timestamp;
+    const time = ts instanceof Date ? ts.getTime() / 1000 : (typeof ts === 'number' ? ts : i);
+
+    // Power
+    let power = r.power ?? null;
+    if (power != null && !isNaN(power)) {
+      pointsWithPower++;
+    } else {
+      power = null;
+    }
+
+    // Speed & distance
+    let speed = r.enhancedSpeed ?? r.speed ?? 0;
+    if (i > 0 && points.length > 0) {
+      const prev = points[points.length - 1];
+      const d = haversine(prev.lat, prev.lon, lat, lon);
+      totalDist += d;
+    }
+
+    points.push({ lat, lon, ele, dist: totalDist, time, power, speed });
+  }
+
+  if (pointsWithPower === 0) {
+    throw new Error('No power data found in FIT file.');
+  }
+
+  finalizeRideData(points, pointsWithPower, totalDist);
+}
+
+// =====================================================================
+//  SHARED POST-PROCESSING
+// =====================================================================
+function finalizeRideData(points, pointsWithPower, totalDist) {
+  // Smooth elevation (7-point window)
+  const win = 7;
+  for (let i = 0; i < points.length; i++) {
+    let sum = 0, count = 0;
+    for (let j = Math.max(0, i - win); j <= Math.min(points.length - 1, i + win); j++) {
+      sum += points[j].ele; count++;
+    }
+    points[i].eleSmooth = sum / count;
+  }
+
+  // Compute grade (50m window)
+  for (let i = 0; i < points.length; i++) {
+    if (i === 0) { points[i].grade = 0; continue; }
+    let j = i - 1;
+    while (j > 0 && (points[i].dist - points[j].dist) < 50) j--;
+    const dd = points[i].dist - points[j].dist;
+    const de = points[i].eleSmooth - points[j].eleSmooth;
+    points[i].grade = dd > 0 ? (de / dd) * 100 : 0;
+  }
+
+  // Compute bearing
+  for (let i = 0; i < points.length; i++) {
+    if (i === 0) { points[i].bearing = 0; continue; }
+    const prev = points[i - 1];
+    const dLon = (points[i].lon - prev.lon) * Math.PI / 180;
+    const lat1 = prev.lat * Math.PI / 180;
+    const lat2 = points[i].lat * Math.PI / 180;
+    const x = Math.sin(dLon) * Math.cos(lat2);
+    const y = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    points[i].bearing = ((Math.atan2(x, y) * 180 / Math.PI) + 360) % 360;
+  }
+
+  // Smooth speed (5-point)
+  const speedWin = 5;
+  for (let i = 0; i < points.length; i++) {
+    let sum = 0, count = 0;
+    for (let j = Math.max(0, i - speedWin); j <= Math.min(points.length - 1, i + speedWin); j++) {
+      if (points[j].speed > 0) { sum += points[j].speed; count++; }
+    }
+    points[i].speedSmooth = count > 0 ? sum / count : 0;
+  }
+
+  // Compute acceleration (for filtering)
+  for (let i = 0; i < points.length; i++) {
+    if (i === 0) { points[i].accel = 0; continue; }
+    const dt = points[i].time - points[i-1].time;
+    points[i].accel = dt > 0 ? (points[i].speedSmooth - points[i-1].speedSmooth) / dt : 0;
+  }
+
+  const totalClimb = points.reduce((s, p, i) => {
+    if (i === 0) return 0;
+    const d = p.eleSmooth - points[i-1].eleSmooth;
+    return s + (d > 0 ? d : 0);
+  }, 0);
+
+  const totalTime = points.length > 1 ? points[points.length - 1].time - points[0].time : 0;
+
+  rideData = {
+    points,
+    pointsWithPower,
+    totalDist,
+    totalClimb,
+    totalTime,
+    minEle: Math.min(...points.map(p => p.ele)),
+    maxEle: Math.max(...points.map(p => p.ele)),
+  };
+}
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// =====================================================================
+//  CALIBRATION / LEAST SQUARES
+// =====================================================================
+function runCalibration() {
+  if (!rideData) return;
+
+  const riderMass = parseFloat(document.getElementById('calRiderMass').value) || 75;
+  const bikeMass = parseFloat(document.getElementById('calBikeMass').value) || 9;
+  const totalMass = riderMass + bikeMass;
+  const tempC = parseFloat(document.getElementById('calTemp').value) || 20;
+  const altitude = parseFloat(document.getElementById('calAltitude').value) || 100;
+  const windSpeedKmh = parseFloat(document.getElementById('calWindSpeed').value) || 0;
+  const windFromDeg = parseFloat(document.getElementById('calWindDir').value) || 0;
+  const drivetrainLoss = (parseFloat(document.getElementById('calDrivetrainLoss').value) || 3) / 100;
+
+  const minSpeed = (parseFloat(document.getElementById('calMinSpeed').value) || 12) / 3.6;
+  const maxSpeed = (parseFloat(document.getElementById('calMaxSpeed').value) || 60) / 3.6;
+  const minPower = parseFloat(document.getElementById('calMinPower').value) || 50;
+  const maxGrade = parseFloat(document.getElementById('calMaxGrade').value) || 12;
+  const maxAccel = parseFloat(document.getElementById('calMaxAccel').value) || 0.5;
+  const powerLag = parseInt(document.getElementById('calPowerLag').value) || 0;
+
+  const rho = airDensity(tempC, altitude);
+  const windSpeedMs = windSpeedKmh / 3.6;
+  const windVecDeg = (windFromDeg + 180) % 360;
+
+  // Build the regression matrix
+  // y = P_wheel/v - m*g*sin(theta) - m*a  (subtract acceleration force)
+  // x1 = 0.5 * rho * (v + v_hw)^2          (coefficient for CdA)
+  // x2 = m * g * cos(theta)                 (coefficient for Crr)
+
+  const X = [];
+  const Y = [];
+  const usedPoints = [];
+  const pts = rideData.points;
+
+  for (let idx = 0; idx < pts.length; idx++) {
+    const p = pts[idx];
+    if (p.power === null) continue;
+
+    // Apply power lag: use power from `powerLag` seconds earlier
+    let power = p.power;
+    if (powerLag > 0) {
+      // Find the point ~powerLag seconds earlier
+      const targetTime = p.time - powerLag;
+      let lagIdx = idx;
+      while (lagIdx > 0 && pts[lagIdx].time > targetTime) lagIdx--;
+      if (pts[lagIdx].power !== null) power = pts[lagIdx].power;
+    }
+
+    const v = p.speedSmooth;
+    if (v < minSpeed || v > maxSpeed) continue;
+    if (power < minPower) continue;
+    if (Math.abs(p.grade) > maxGrade) continue;
+    if (Math.abs(p.accel || 0) > maxAccel) continue;
+
+    const gradeRad = Math.atan(p.grade / 100);
+    const powerWheel = power * (1 - drivetrainLoss);
+
+    // Headwind component
+    const angleDiff = (windVecDeg - p.bearing) * Math.PI / 180;
+    const headwind = -windSpeedMs * Math.cos(angleDiff);
+
+    // Subtract acceleration force: P/v = F_aero + F_roll + F_gravity + F_accel
+    // F_accel = m * a,  so y = P/v - m*g*sin(θ) - m*a
+    const accelForce = totalMass * (p.accel || 0);
+    const y = powerWheel / v - totalMass * G * Math.sin(gradeRad) - accelForce;
+    const x1 = 0.5 * rho * (v + headwind) * Math.abs(v + headwind);
+    const x2 = totalMass * G * Math.cos(gradeRad);
+
+    if (y < 0 || !isFinite(y) || !isFinite(x1) || !isFinite(x2)) continue;
+
+    X.push([x1, x2]);
+    Y.push(y);
+    usedPoints.push(p);
+  }
+
+  if (Y.length < 20) {
+    showStatus(`⚠️ Only ${Y.length} valid data points after filtering. Need at least 20. Try relaxing filters.`, 'bad');
+    return;
+  }
+
+  // Ordinary least squares: solve X'X * beta = X'Y
+  // beta = [CdA, Crr]
+  const n = Y.length;
+
+  // X'X (2x2)
+  let xx00 = 0, xx01 = 0, xx11 = 0;
+  let xy0 = 0, xy1 = 0;
+
+  for (let i = 0; i < n; i++) {
+    xx00 += X[i][0] * X[i][0];
+    xx01 += X[i][0] * X[i][1];
+    xx11 += X[i][1] * X[i][1];
+    xy0 += X[i][0] * Y[i];
+    xy1 += X[i][1] * Y[i];
+  }
+
+  // Invert 2x2 matrix
+  const det = xx00 * xx11 - xx01 * xx01;
+  if (Math.abs(det) < 1e-20) {
+    showStatus('⚠️ Singular matrix — not enough variation in the data. Ride on varied terrain.', 'bad');
+    return;
+  }
+
+  const cda = (xx11 * xy0 - xx01 * xy1) / det;
+  const crr = (xx00 * xy1 - xx01 * xy0) / det;
+
+  // Compute R² and RMSE
+  const yMean = Y.reduce((s, y) => s + y, 0) / n;
+  let ssRes = 0, ssTot = 0;
+  const residuals = [];
+  const predicted = [];
+
+  for (let i = 0; i < n; i++) {
+    const yHat = cda * X[i][0] + crr * X[i][1];
+    const res = Y[i] - yHat;
+    ssRes += res * res;
+    ssTot += (Y[i] - yMean) * (Y[i] - yMean);
+    residuals.push(res);
+
+    // Predicted speed (from predicted force balance)
+    // P/v = CdA*x1 + Crr*x2 + m*g*sin(theta)
+    // So predicted P/v = yHat + m*g*sin(theta)
+    // And we can compute predicted speed given power
+    predicted.push(yHat);
+  }
+
+  const r2 = 1 - ssRes / (ssTot || 1);
+  const rmse = Math.sqrt(ssRes / n);
+
+  // Standard errors (for confidence intervals)
+  const s2 = ssRes / (n - 2);
+  const seCda = Math.sqrt(s2 * xx11 / det);
+  const seCrr = Math.sqrt(s2 * xx00 / det);
+
+  calResult = {
+    cda, crr, r2, rmse, n,
+    seCda, seCrr,
+    rho, totalMass,
+    usedPoints, residuals, predicted,
+    X, Y,
+  };
+
+  // Show results
+  document.getElementById('resultsCard').style.display = '';
+  renderResults();
+  saveCalibrationResults();
+  setTimeout(() => {
+    document.getElementById('resultsCard').scrollIntoView({behavior: 'smooth'});
+  }, 100);
+}
+
+// =====================================================================
+//  RENDER RESULTS
+// =====================================================================
+function renderResults() {
+  renderRideMap();
+  renderRideStats();
+  renderEstimates();
+  renderFitQuality();
+  renderCharts();
+  renderReferenceRanges();
+  renderExportValues();
+}
+
+function renderRideMap() {
+  if (calCharts.map) { calCharts.map.remove(); calCharts.map = null; }
+  const mapEl = document.getElementById('calMap');
+  calCharts.map = L.map(mapEl);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(calCharts.map);
+
+  const latlngs = rideData.points.map(p => [p.lat, p.lon]);
+  const poly = L.polyline(latlngs, {color: '#1a1a1a', weight: 2, opacity: 0.3}).addTo(calCharts.map);
+
+  // Overlay used points in green
+  const usedLatLngs = calResult.usedPoints.map(p => [p.lat, p.lon]);
+  if (usedLatLngs.length > 1) {
+    // Draw used segments — since points may not be contiguous, draw dots
+    for (let i = 0; i < usedLatLngs.length; i += Math.max(1, Math.floor(usedLatLngs.length / 500))) {
+      L.circleMarker(usedLatLngs[i], {radius: 2, color: '#4caf50', fillOpacity: 0.6, stroke: false})
+        .addTo(calCharts.map);
+    }
+  }
+
+  calCharts.map.fitBounds(poly.getBounds(), {padding: [30, 30]});
+}
+
+function renderRideStats() {
+  const el = document.getElementById('rideStats');
+  const d = rideData;
+  const hours = Math.floor(d.totalTime / 3600);
+  const mins = Math.floor((d.totalTime % 3600) / 60);
+  const avgPower = d.points.filter(p => p.power > 0).reduce((s, p) => s + p.power, 0) /
+                   (d.points.filter(p => p.power > 0).length || 1);
+
+  el.innerHTML = `
+    <div class="stat"><span class="stat-label">Distance</span><span class="stat-value">${(d.totalDist/1000).toFixed(1)} km</span></div>
+    <div class="stat"><span class="stat-label">Duration</span><span class="stat-value">${hours}:${String(mins).padStart(2,'0')}</span></div>
+    <div class="stat"><span class="stat-label">Climbing</span><span class="stat-value">${d.totalClimb.toFixed(0)} m</span></div>
+    <div class="stat"><span class="stat-label">Avg power</span><span class="stat-value">${avgPower.toFixed(0)} W</span></div>
+    <div class="stat"><span class="stat-label">Points used</span><span class="stat-value">${calResult.n} / ${d.pointsWithPower}</span></div>
+    <div class="stat"><span class="stat-label">Air density</span><span class="stat-value">${calResult.rho.toFixed(3)} kg/m³</span></div>
+  `;
+}
+
+function renderEstimates() {
+  const el = document.getElementById('estimateResults');
+  const { cda, crr, seCda, seCrr, r2 } = calResult;
+
+  // Classify quality
+  const cdaOk = cda > 0.15 && cda < 0.6;
+  const crrOk = crr > 0.001 && crr < 0.015;
+  const r2Ok = r2 > 0.8;
+  const overallOk = cdaOk && crrOk && r2Ok;
+
+  const cdaCI = [Math.max(0, cda - 1.96 * seCda), cda + 1.96 * seCda];
+  const crrCI = [Math.max(0, crr - 1.96 * seCrr), crr + 1.96 * seCrr];
+
+  el.innerHTML = `
+    ${!overallOk ? '<div class="warning-box">⚠️ Some estimates are outside typical ranges. Check your input data, filters, and wind conditions.</div>' : ''}
+
+    <div class="route-stats" style="margin-bottom:1.5rem;">
+      <div class="stat">
+        <span class="stat-label">CdA (m²)</span>
+        <span class="stat-value big">${cda.toFixed(4)}</span>
+        <span style="font-size:.7rem; color:var(--muted);">95% CI: ${cdaCI[0].toFixed(4)} – ${cdaCI[1].toFixed(4)}</span>
+        ${cdaOk ? '<span class="pill good">PLAUSIBLE</span>' : '<span class="pill poor">CHECK</span>'}
+      </div>
+      <div class="stat">
+        <span class="stat-label">Crr</span>
+        <span class="stat-value big">${crr.toFixed(5)}</span>
+        <span style="font-size:.7rem; color:var(--muted);">95% CI: ${crrCI[0].toFixed(5)} – ${crrCI[1].toFixed(5)}</span>
+        ${crrOk ? '<span class="pill good">PLAUSIBLE</span>' : '<span class="pill poor">CHECK</span>'}
+      </div>
+      <div class="stat">
+        <span class="stat-label">R²</span>
+        <span class="stat-value big">${r2.toFixed(3)}</span>
+        ${r2 > 0.9 ? '<span class="pill good">EXCELLENT</span>' :
+          r2 > 0.8 ? '<span class="pill ok">GOOD</span>' :
+          r2 > 0.6 ? '<span class="pill ok">FAIR</span>' :
+          '<span class="pill poor">POOR</span>'}
+      </div>
+    </div>
+
+    <div class="note">
+      <strong>CdA</strong> is the aerodynamic drag area (frontal area × drag coefficient).
+      Lower = more aero. Hoods position: 0.30–0.38 m². Drops: 0.27–0.33 m². TT position: 0.20–0.26 m².<br>
+      <strong>Crr</strong> is rolling resistance coefficient. Typical road tires: 0.003–0.006.
+      Gravel/MTB tires: 0.006–0.012.
+    </div>
+  `;
+}
+
+function renderFitQuality() {
+  const el = document.getElementById('fitQuality');
+  const { r2, rmse, n, residuals } = calResult;
+
+  // Residuals stats
+  const absRes = residuals.map(r => Math.abs(r));
+  const medianRes = absRes.sort((a, b) => a - b)[Math.floor(absRes.length / 2)];
+  const maxRes = Math.max(...absRes);
+
+  el.innerHTML = `
+    <div class="route-stats">
+      <div class="stat"><span class="stat-label">R²</span><span class="stat-value">${r2.toFixed(4)}</span></div>
+      <div class="stat"><span class="stat-label">RMSE (N)</span><span class="stat-value">${rmse.toFixed(2)}</span></div>
+      <div class="stat"><span class="stat-label">Median |residual|</span><span class="stat-value">${medianRes.toFixed(2)} N</span></div>
+      <div class="stat"><span class="stat-label">Max |residual|</span><span class="stat-value">${maxRes.toFixed(1)} N</span></div>
+      <div class="stat"><span class="stat-label">Data points</span><span class="stat-value">${n}</span></div>
+    </div>
+
+    <div class="note">
+      <strong>R²</strong> measures how much of the force variation is explained by the model.
+      >0.90 is excellent. <0.70 suggests noisy data, wind, or drafting.<br>
+      <strong>RMSE</strong> is the root-mean-square residual force error in Newtons.
+      Under 5 N is very good for field testing.
+    </div>
+  `;
+}
+
+function renderCharts() {
+  // Destroy old charts
+  Object.keys(calCharts).forEach(k => {
+    if (k !== 'map' && calCharts[k]) { calCharts[k].destroy(); delete calCharts[k]; }
+  });
+
+  const { usedPoints, residuals, X, Y, cda, crr } = calResult;
+
+  // 1. Predicted vs Actual (force balance)
+  const scatterData = Y.map((y, i) => ({
+    x: y,
+    y: cda * X[i][0] + crr * X[i][1],
+  }));
+
+  calCharts.scatter = new Chart(document.getElementById('scatterChart').getContext('2d'), {
+    type: 'scatter',
+    data: {
+      datasets: [
+        {
+          label: 'Data points',
+          data: scatterData,
+          backgroundColor: 'rgba(33,150,243,0.3)',
+          borderColor: 'rgba(33,150,243,0.6)',
+          pointRadius: 2,
+        },
+        {
+          label: 'Perfect fit',
+          data: [{x: 0, y: 0}, {x: Math.max(...Y) * 1.1, y: Math.max(...Y) * 1.1}],
+          type: 'line',
+          borderColor: '#e74c3c',
+          borderWidth: 1.5,
+          borderDash: [4, 4],
+          pointRadius: 0,
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { title: { display: true, text: 'Actual F (N)', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,.05)' } },
+        y: { title: { display: true, text: 'Predicted F (N)', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,.05)' } },
+      }
+    }
+  });
+
+  // 2. Residuals vs speed
+  const resSpeedData = usedPoints.map((p, i) => ({
+    x: p.speedSmooth * 3.6,
+    y: residuals[i],
+  }));
+
+  calCharts.residual = new Chart(document.getElementById('residualChart').getContext('2d'), {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Residual',
+        data: resSpeedData,
+        backgroundColor: 'rgba(76,175,80,0.3)',
+        borderColor: 'rgba(76,175,80,0.6)',
+        pointRadius: 2,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        annotation: {
+          annotations: {
+            zero: { type: 'line', yMin: 0, yMax: 0, borderColor: '#999', borderWidth: 1, borderDash: [3, 3] }
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Speed (km/h)', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,.05)' } },
+        y: { title: { display: true, text: 'Residual (N)', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,.05)' } },
+      }
+    }
+  });
+
+  // 3. Power vs Speed colored by grade
+  const gradeColorFn = g => {
+    const ag = Math.abs(g);
+    if (ag < 2) return 'rgba(76,175,80,0.5)';
+    if (ag < 5) return 'rgba(255,193,7,0.5)';
+    if (ag < 8) return 'rgba(255,152,0,0.5)';
+    return 'rgba(244,67,54,0.5)';
+  };
+
+  const psData = usedPoints.map(p => ({
+    x: p.speedSmooth * 3.6,
+    y: p.power,
+  }));
+  const psColors = usedPoints.map(p => gradeColorFn(p.grade));
+
+  calCharts.powerSpeed = new Chart(document.getElementById('powerSpeedChart').getContext('2d'), {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Power vs Speed',
+        data: psData,
+        backgroundColor: psColors,
+        pointRadius: 2,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { title: { display: true, text: 'Speed (km/h)', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,.05)' } },
+        y: { title: { display: true, text: 'Power (W)', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,.05)' } },
+      }
+    }
+  });
+
+  // 4. Sensitivity: how much does error change if we perturb CdA and Crr
+  renderSensitivityCharts();
+}
+
+function renderSensitivityCharts() {
+  const { cda, crr, X, Y } = calResult;
+  const steps = 30;
+
+  // --- CdA sensitivity ---
+  const cdaRange = [];
+  for (let i = -steps; i <= steps; i++) cdaRange.push(cda + (i / steps) * 0.05);
+
+  const rmseAtCda = cdaRange.map(testCda => {
+    let ssRes = 0;
+    for (let i = 0; i < Y.length; i++) {
+      const yHat = testCda * X[i][0] + crr * X[i][1];
+      ssRes += (Y[i] - yHat) ** 2;
+    }
+    return Math.sqrt(ssRes / Y.length);
+  });
+
+  calCharts.sensCda = new Chart(document.getElementById('sensitivityCdaChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: cdaRange.map(c => c.toFixed(3)),
+      datasets: [{
+        label: 'RMSE (N)',
+        data: rmseAtCda,
+        borderColor: '#e74c3c',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0.3,
+        fill: { target: 'origin', above: 'rgba(231,76,60,0.08)' },
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        annotation: {
+          annotations: {
+            best: {
+              type: 'line',
+              xMin: steps, xMax: steps,
+              borderColor: '#1a1a1a', borderWidth: 1.5, borderDash: [3,3],
+              label: { display: true, content: `CdA=${cda.toFixed(3)}`, position: 'start', font: { size: 9 } }
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'CdA (m²)', font: { size: 9 } },
+          ticks: { font: { size: 8 }, maxTicksLimit: 7 },
+          grid: { color: 'rgba(0,0,0,.05)' },
+        },
+        y: {
+          title: { display: true, text: 'RMSE (N)', font: { size: 9 } },
+          ticks: { font: { size: 8 } },
+          grid: { color: 'rgba(0,0,0,.05)' },
+        }
+      }
+    }
+  });
+
+  // --- Crr sensitivity ---
+  const crrRange = [];
+  for (let i = -steps; i <= steps; i++) crrRange.push(crr + (i / steps) * 0.003);
+
+  const rmseAtCrr = crrRange.map(testCrr => {
+    let ssRes = 0;
+    for (let i = 0; i < Y.length; i++) {
+      const yHat = cda * X[i][0] + testCrr * X[i][1];
+      ssRes += (Y[i] - yHat) ** 2;
+    }
+    return Math.sqrt(ssRes / Y.length);
+  });
+
+  calCharts.sensCrr = new Chart(document.getElementById('sensitivityCrrChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: crrRange.map(c => c.toFixed(4)),
+      datasets: [{
+        label: 'RMSE (N)',
+        data: rmseAtCrr,
+        borderColor: '#2196f3',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0.3,
+        fill: { target: 'origin', above: 'rgba(33,150,243,0.08)' },
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        annotation: {
+          annotations: {
+            best: {
+              type: 'line',
+              xMin: steps, xMax: steps,
+              borderColor: '#1a1a1a', borderWidth: 1.5, borderDash: [3,3],
+              label: { display: true, content: `Crr=${crr.toFixed(5)}`, position: 'start', font: { size: 9 } }
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Crr', font: { size: 9 } },
+          ticks: { font: { size: 8 }, maxTicksLimit: 7 },
+          grid: { color: 'rgba(0,0,0,.05)' },
+        },
+        y: {
+          title: { display: true, text: 'RMSE (N)', font: { size: 9 } },
+          ticks: { font: { size: 8 } },
+          grid: { color: 'rgba(0,0,0,.05)' },
+        }
+      }
+    }
+  });
+}
+
+function renderReferenceRanges() {
+  const el = document.getElementById('referenceRanges');
+  const { cda, crr } = calResult;
+
+  function posBar(val, min, max, unit, ranges) {
+    const pct = Math.max(0, Math.min(100, ((val - min) / (max - min)) * 100));
+    let rangesHtml = '';
+    for (const r of ranges) {
+      const left = ((r.min - min) / (max - min)) * 100;
+      const width = ((r.max - r.min) / (max - min)) * 100;
+      rangesHtml += `<div class="range-fill" style="left:${left}%; width:${width}%; background:${r.color};"></div>`;
+    }
+    return `<div class="range-bar">
+      <span class="range-label">${min}${unit}</span>
+      <div class="range-track">
+        ${rangesHtml}
+        <div class="range-marker" style="left:${pct}%;" title="${val.toFixed(4)}${unit}"></div>
+      </div>
+      <span class="range-label" style="text-align:right;">${max}${unit}</span>
+    </div>`;
+  }
+
+  el.innerHTML = `
+    <table class="gear-table">
+      <tr><th>Position / Surface</th><th>Typical Range</th><th>Your Value</th></tr>
+      <tr>
+        <td><strong>CdA — TT/triathlon bars</strong></td>
+        <td>0.200 – 0.260 m²</td>
+        <td>${cda >= 0.200 && cda <= 0.260 ? '✓' : '—'}</td>
+      </tr>
+      <tr>
+        <td><strong>CdA — Drops (road bike)</strong></td>
+        <td>0.270 – 0.330 m²</td>
+        <td>${cda >= 0.270 && cda <= 0.330 ? '✓' : '—'}</td>
+      </tr>
+      <tr>
+        <td><strong>CdA — Hoods (road bike)</strong></td>
+        <td>0.300 – 0.380 m²</td>
+        <td>${cda >= 0.300 && cda <= 0.380 ? '✓' : '—'}</td>
+      </tr>
+      <tr>
+        <td><strong>CdA — Upright / MTB</strong></td>
+        <td>0.400 – 0.550 m²</td>
+        <td>${cda >= 0.400 && cda <= 0.550 ? '✓' : '—'}</td>
+      </tr>
+      <tr><td colspan="3" style="border:none; height:.5rem;"></td></tr>
+      <tr>
+        <td><strong>Crr — Race slicks (smooth)</strong></td>
+        <td>0.0025 – 0.0040</td>
+        <td>${crr >= 0.0025 && crr <= 0.0040 ? '✓' : '—'}</td>
+      </tr>
+      <tr>
+        <td><strong>Crr — Training tires (road)</strong></td>
+        <td>0.0040 – 0.0060</td>
+        <td>${crr >= 0.0040 && crr <= 0.0060 ? '✓' : '—'}</td>
+      </tr>
+      <tr>
+        <td><strong>Crr — Gravel / rough road</strong></td>
+        <td>0.0060 – 0.0100</td>
+        <td>${crr >= 0.0060 && crr <= 0.0100 ? '✓' : '—'}</td>
+      </tr>
+      <tr>
+        <td><strong>Crr — MTB off-road</strong></td>
+        <td>0.0100 – 0.0200</td>
+        <td>${crr >= 0.0100 && crr <= 0.0200 ? '✓' : '—'}</td>
+      </tr>
+    </table>
+
+    <h3 style="margin-top:1.25rem; font-size:.8rem;">Your CdA on the reference scale</h3>
+    ${posBar(cda, 0.18, 0.55, ' m²', [
+      {min: 0.18, max: 0.26, color: 'rgba(33,150,243,0.25)'},
+      {min: 0.27, max: 0.33, color: 'rgba(76,175,80,0.25)'},
+      {min: 0.30, max: 0.38, color: 'rgba(255,193,7,0.25)'},
+      {min: 0.40, max: 0.55, color: 'rgba(255,152,0,0.25)'},
+    ])}
+    <div style="font-size:.65rem; color:var(--muted); display:flex; justify-content:space-between;">
+      <span>← More aero (TT)</span><span>Less aero (upright) →</span>
+    </div>
+
+    <h3 style="margin-top:1rem; font-size:.8rem;">Your Crr on the reference scale</h3>
+    ${posBar(crr, 0.002, 0.015, '', [
+      {min: 0.002, max: 0.004, color: 'rgba(33,150,243,0.25)'},
+      {min: 0.004, max: 0.006, color: 'rgba(76,175,80,0.25)'},
+      {min: 0.006, max: 0.010, color: 'rgba(255,193,7,0.25)'},
+      {min: 0.010, max: 0.015, color: 'rgba(255,152,0,0.25)'},
+    ])}
+    <div style="font-size:.65rem; color:var(--muted); display:flex; justify-content:space-between;">
+      <span>← Lower Crr (race slicks)</span><span>Higher Crr (gravel/MTB) →</span>
+    </div>
+  `;
+}
+
+function renderExportValues() {
+  const el = document.getElementById('exportValues');
+  const { cda, crr, rho } = calResult;
+  const riderMass = parseFloat(document.getElementById('calRiderMass').value) || 75;
+  const bikeMass = parseFloat(document.getElementById('calBikeMass').value) || 9;
+
+  // Build a URL with query params for the workout tuner
+  const params = new URLSearchParams({
+    cda: cda.toFixed(4),
+    crr: crr.toFixed(5),
+    weight: riderMass,
+    bike: bikeMass,
+  });
+
+  el.innerHTML = `
+    <div class="result-box success">
+      <div class="route-stats">
+        <div class="stat"><span class="stat-label">CdA</span><span class="stat-value">${cda.toFixed(4)} m²</span></div>
+        <div class="stat"><span class="stat-label">Crr</span><span class="stat-value">${crr.toFixed(5)}</span></div>
+        <div class="stat"><span class="stat-label">Rider mass</span><span class="stat-value">${riderMass} kg</span></div>
+        <div class="stat"><span class="stat-label">Bike mass</span><span class="stat-value">${bikeMass} kg</span></div>
+      </div>
+
+      <div class="btn-row" style="margin-top:1rem;">
+        <a class="btn" href="workout-route-tuner.html?${params.toString()}" style="text-decoration:none;">
+          Open Workout Route Tuner with these values →
+        </a>
+        <button class="btn small" onclick="copyValues()">📋 Copy values</button>
+      </div>
+    </div>
+
+    <div class="note">
+      <strong>Tips for better estimates:</strong><br>
+      • Ride on a route you know well — the GPS elevation must be accurate.<br>
+      • Ride at a consistent effort (tempo or steady-state is ideal).<br>
+      • Calm wind conditions are best; if windy, enter the wind speed & direction.<br>
+      • A flat-to-rolling course gives better CdA estimates; a hilly course gives better Crr estimates.<br>
+      • Avoid drafting — ride solo.<br>
+      • Run multiple rides and average the results for more confidence.
+    </div>
+  `;
+}
+
+function copyValues() {
+  const { cda, crr } = calResult;
+  const riderMass = parseFloat(document.getElementById('calRiderMass').value) || 75;
+  const bikeMass = parseFloat(document.getElementById('calBikeMass').value) || 9;
+  const text = `CdA: ${cda.toFixed(4)} m²\nCrr: ${crr.toFixed(5)}\nRider: ${riderMass} kg\nBike: ${bikeMass} kg`;
+  navigator.clipboard.writeText(text).then(() => {
+    alert('Copied to clipboard!');
+  });
+}
+
+// =====================================================================
+//  AUTO-DETECT LAG
+// =====================================================================
+function autoDetectLag() {
+  if (!rideData) { alert('Load a ride first.'); return; }
+
+  // Try lags from 0 to 10 seconds, pick the one with highest R²
+  const origLag = document.getElementById('calPowerLag').value;
+  let bestR2 = -Infinity, bestLag = 0;
+  const results = [];
+
+  for (let lag = 0; lag <= 10; lag++) {
+    document.getElementById('calPowerLag').value = lag;
+    // Quick inline calibration (reusing runCalibration logic but not rendering)
+    const r2 = quickCalibrate(lag);
+    results.push({ lag, r2 });
+    if (r2 > bestR2) { bestR2 = r2; bestLag = lag; }
+  }
+
+  document.getElementById('calPowerLag').value = bestLag;
+  const summary = results.map(r => `${r.lag}s: R²=${r.r2.toFixed(4)}`).join(', ');
+  showStatus(`🔍 Best lag: ${bestLag}s (R²=${bestR2.toFixed(4)}). Tested: ${summary}`, 'good');
+}
+
+function quickCalibrate(lagSeconds) {
+  // Lightweight version of runCalibration that just returns R²
+  const riderMass = parseFloat(document.getElementById('calRiderMass').value) || 75;
+  const bikeMass = parseFloat(document.getElementById('calBikeMass').value) || 9;
+  const totalMass = riderMass + bikeMass;
+  const tempC = parseFloat(document.getElementById('calTemp').value) || 20;
+  const altitude = parseFloat(document.getElementById('calAltitude').value) || 100;
+  const drivetrainLoss = (parseFloat(document.getElementById('calDrivetrainLoss').value) || 3) / 100;
+  const windSpeedKmh = parseFloat(document.getElementById('calWindSpeed').value) || 0;
+  const windFromDeg = parseFloat(document.getElementById('calWindDir').value) || 0;
+  const minSpeed = (parseFloat(document.getElementById('calMinSpeed').value) || 12) / 3.6;
+  const maxSpeed = (parseFloat(document.getElementById('calMaxSpeed').value) || 60) / 3.6;
+  const minPower = parseFloat(document.getElementById('calMinPower').value) || 50;
+  const maxGrade = parseFloat(document.getElementById('calMaxGrade').value) || 12;
+  const maxAccel = parseFloat(document.getElementById('calMaxAccel').value) || 0.5;
+
+  const rho = airDensity(tempC, altitude);
+  const windSpeedMs = windSpeedKmh / 3.6;
+  const windVecDeg = (windFromDeg + 180) % 360;
+  const pts = rideData.points;
+
+  const X = [], Y = [];
+
+  for (let idx = 0; idx < pts.length; idx++) {
+    const p = pts[idx];
+    if (p.power === null) continue;
+
+    let power = p.power;
+    if (lagSeconds > 0) {
+      const targetTime = p.time - lagSeconds;
+      let lagIdx = idx;
+      while (lagIdx > 0 && pts[lagIdx].time > targetTime) lagIdx--;
+      if (pts[lagIdx].power !== null) power = pts[lagIdx].power;
+    }
+
+    const v = p.speedSmooth;
+    if (v < minSpeed || v > maxSpeed) continue;
+    if (power < minPower) continue;
+    if (Math.abs(p.grade) > maxGrade) continue;
+    if (Math.abs(p.accel || 0) > maxAccel) continue;
+
+    const gradeRad = Math.atan(p.grade / 100);
+    const powerWheel = power * (1 - drivetrainLoss);
+    const angleDiff = (windVecDeg - p.bearing) * Math.PI / 180;
+    const headwind = -windSpeedMs * Math.cos(angleDiff);
+    const accelForce = totalMass * (p.accel || 0);
+    const y = powerWheel / v - totalMass * G * Math.sin(gradeRad) - accelForce;
+    const x1 = 0.5 * rho * (v + headwind) * Math.abs(v + headwind);
+    const x2 = totalMass * G * Math.cos(gradeRad);
+
+    if (y < 0 || !isFinite(y) || !isFinite(x1) || !isFinite(x2)) continue;
+    X.push([x1, x2]);
+    Y.push(y);
+  }
+
+  if (Y.length < 20) return -1;
+
+  const n = Y.length;
+  let xx00 = 0, xx01 = 0, xx11 = 0, xy0 = 0, xy1 = 0;
+  for (let i = 0; i < n; i++) {
+    xx00 += X[i][0] * X[i][0]; xx01 += X[i][0] * X[i][1];
+    xx11 += X[i][1] * X[i][1]; xy0 += X[i][0] * Y[i]; xy1 += X[i][1] * Y[i];
+  }
+  const det = xx00 * xx11 - xx01 * xx01;
+  if (Math.abs(det) < 1e-20) return -1;
+  const cda = (xx11 * xy0 - xx01 * xy1) / det;
+  const crr = (xx00 * xy1 - xx01 * xy0) / det;
+
+  const yMean = Y.reduce((s, y) => s + y, 0) / n;
+  let ssRes = 0, ssTot = 0;
+  for (let i = 0; i < n; i++) {
+    const yHat = cda * X[i][0] + crr * X[i][1];
+    ssRes += (Y[i] - yHat) ** 2;
+    ssTot += (Y[i] - yMean) ** 2;
+  }
+  return 1 - ssRes / (ssTot || 1);
+}
+
+// =====================================================================
+//  DEMO RIDE
+// =====================================================================
+function loadDemoRide() {
+  // Generate a synthetic ride with realistic power/speed/grade relationships
+  const points = [];
+  const numPoints = 600;
+  const startLat = 39.975, startLon = -105.25;
+
+  // True parameters for the demo
+  const trueCda = 0.325;
+  const trueCrr = 0.0045;
+  const trueMass = 84; // rider + bike
+  const rho = 1.10; // ~1600m altitude, 20°C
+
+  let dist = 0;
+  let t = 0;
+
+  for (let i = 0; i < numPoints; i++) {
+    const frac = i / numPoints;
+
+    // Route shape: loop
+    let lat, lon, ele;
+    if (frac < 0.3) {
+      const s = frac / 0.3;
+      lat = startLat + s * 0.03;
+      lon = startLon + s * 0.005;
+      ele = 1610 + s * 30 + 5 * Math.sin(s * 10 * Math.PI);
+    } else if (frac < 0.5) {
+      const s = (frac - 0.3) / 0.2;
+      lat = startLat + 0.03 + s * 0.01;
+      lon = startLon + 0.005 - s * 0.02;
+      ele = 1640 + s * 120 + 10 * Math.sin(s * 6 * Math.PI);
+    } else if (frac < 0.7) {
+      const s = (frac - 0.5) / 0.2;
+      lat = startLat + 0.04 - s * 0.01;
+      lon = startLon - 0.015 + s * 0.02;
+      ele = 1760 - s * 120 + 10 * Math.sin(s * 6 * Math.PI);
+    } else {
+      const s = (frac - 0.7) / 0.3;
+      lat = startLat + 0.03 - s * 0.03;
+      lon = startLon + 0.005 - s * 0.005;
+      ele = 1640 - s * 30 + 5 * Math.sin(s * 10 * Math.PI);
+    }
+
+    if (i > 0) {
+      dist += haversine(points[i-1].lat, points[i-1].lon, lat, lon);
+    }
+
+    // Compute grade
+    let grade = 0;
+    if (i > 5) {
+      const dd = dist - points[i - 5].dist;
+      const de = ele - points[i - 5].ele;
+      grade = dd > 0 ? (de / dd) * 100 : 0;
+    }
+
+    // Simulate realistic power (varies by grade)
+    let power;
+    if (Math.abs(grade) < 2) {
+      power = 180 + 40 * Math.sin(frac * 20 * Math.PI) + (Math.random() - 0.5) * 30;
+    } else if (grade > 2) {
+      power = 220 + 30 * grade + (Math.random() - 0.5) * 20;
+    } else {
+      power = 80 + (Math.random() - 0.5) * 40;
+    }
+    power = Math.max(30, power);
+
+    // Compute speed from true physics
+    const gradeRad = Math.atan(grade / 100);
+    const gForce = trueMass * G * Math.sin(gradeRad);
+    const rForce = trueCrr * trueMass * G * Math.cos(gradeRad);
+
+    // Bisection for speed
+    let lo = 0.5, hi = 25;
+    for (let iter = 0; iter < 40; iter++) {
+      const mid = (lo + hi) / 2;
+      const aForce = 0.5 * rho * trueCda * mid * mid;
+      const pCalc = (aForce + rForce + gForce) * mid;
+      if (pCalc < power) lo = mid; else hi = mid;
+    }
+    let speed = (lo + hi) / 2;
+    // Add small noise
+    speed *= (1 + (Math.random() - 0.5) * 0.05);
+    speed = Math.max(1, speed);
+
+    t += (i > 0 ? (dist - points[i-1].dist) / speed : 0);
+
+    const bearing = i > 0 ? (() => {
+      const dLon = (lon - points[i-1].lon) * Math.PI / 180;
+      const lat1 = points[i-1].lat * Math.PI / 180;
+      const lat2 = lat * Math.PI / 180;
+      const x = Math.sin(dLon) * Math.cos(lat2);
+      const y = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+      return ((Math.atan2(x, y) * 180 / Math.PI) + 360) % 360;
+    })() : 0;
+
+    points.push({
+      lat, lon, ele, dist, time: t,
+      power: Math.round(power),
+      speed, speedSmooth: speed,
+      grade, bearing,
+      eleSmooth: ele,
+    });
+  }
+
+  const totalClimb = points.reduce((s, p, i) => {
+    if (i === 0) return 0;
+    const d = p.eleSmooth - points[i-1].eleSmooth;
+    return s + (d > 0 ? d : 0);
+  }, 0);
+
+  rideData = {
+    points,
+    pointsWithPower: numPoints,
+    totalDist: dist,
+    totalClimb,
+    totalTime: t,
+    minEle: Math.min(...points.map(p => p.ele)),
+    maxEle: Math.max(...points.map(p => p.ele)),
+  };
+
+  showStatus(`✅ Demo ride loaded: ${numPoints} points with power. True CdA=0.325, Crr=0.0045 — see how close the estimator gets!`, 'good');
+  document.getElementById('conditionsCard').style.display = '';
+  document.getElementById('calAltitude').value = '1600';
+}
+
+// =====================================================================
+//  IMPORT PARAMS FROM URL (from workout tuner link)
+// =====================================================================
+function checkUrlParams() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('weight')) document.getElementById('calRiderMass').value = params.get('weight');
+  if (params.has('bike')) document.getElementById('calBikeMass').value = params.get('bike');
+  if (params.size > 0) window.history.replaceState({}, '', window.location.pathname);
+}
+
+// =====================================================================
+//  SETTINGS PERSISTENCE (sessionStorage — shared with Workout Route Tuner)
+// =====================================================================
+const PERSIST_FIELDS = [
+  {id: 'calRiderMass',      key: 'rider.weight'},
+  {id: 'calBikeMass',       key: 'rider.bikeWeight'},
+  {id: 'calTemp',           key: 'cal.temp'},
+  {id: 'calAltitude',       key: 'cal.altitude'},
+  {id: 'calWindSpeed',      key: 'rider.windSpeed'},
+  {id: 'calWindDir',        key: 'rider.windDir'},
+  {id: 'calDrivetrainLoss', key: 'cal.drivetrainLoss'},
+  {id: 'calMinSpeed',       key: 'cal.minSpeed'},
+  {id: 'calMaxSpeed',       key: 'cal.maxSpeed'},
+  {id: 'calMinPower',       key: 'cal.minPower'},
+  {id: 'calMaxGrade',       key: 'cal.maxGrade'},
+  {id: 'calMaxAccel',       key: 'cal.maxAccel'},
+  {id: 'calPowerLag',       key: 'cal.powerLag'},
+];
+
+function loadSettings() {
+  for (const f of PERSIST_FIELDS) {
+    const val = sessionStorage.getItem(f.key);
+    if (val !== null) {
+      const el = document.getElementById(f.id);
+      if (el) el.value = val;
+    }
+  }
+}
+
+function saveSettings() {
+  for (const f of PERSIST_FIELDS) {
+    const el = document.getElementById(f.id);
+    if (el) sessionStorage.setItem(f.key, el.value);
+  }
+}
+
+// Write calibration results to sessionStorage so the Workout Route Tuner picks them up
+function saveCalibrationResults() {
+  if (!calResult) return;
+  sessionStorage.setItem('rider.cda', calResult.cda.toFixed(4));
+  sessionStorage.setItem('rider.crr', calResult.crr.toFixed(5));
+  saveSettings(); // also save weight, bike, etc.
+}
+
+function initSettingsPersistence() {
+  for (const f of PERSIST_FIELDS) {
+    const el = document.getElementById(f.id);
+    if (el) {
+      el.addEventListener('change', saveSettings);
+      el.addEventListener('input', saveSettings);
+    }
+  }
+}
+
+// =====================================================================
+//  INIT
+// =====================================================================
+loadSettings();
+checkUrlParams();   // URL params override sessionStorage
+setupDropZone();
+initSettingsPersistence();
+
+</script>
+<script src="/footer.js"></script>
+</body>
+</html>

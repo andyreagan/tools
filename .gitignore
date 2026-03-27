@@ -1,1 +1,7 @@
 node_modules/
+*.fit
+*.FIT
+*.tcx
+*.csv
+*_strava.gpx
+activity_*.gpx
