@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Biological Age Calculator — PhenoAge</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+      --mid:#666; --muted:#999; --border:#ddd; --accent:#e74c3c;
+      --green:#27ae60; --gold:#f39c12;
+    }
+    body{
+      font-family:system-ui,sans-serif;
+      background:var(--bg); color:var(--dark);
+      min-height:100vh; padding:2rem 1rem;
+    }
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0;
+      background-image:repeating-linear-gradient(
+        45deg, transparent, transparent 20px,
+        rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+      );
+    }
+    .page{max-width:640px; margin:0 auto; position:relative; z-index:1;}
+
+    header{margin-bottom:2rem; text-align:center;}
+    h1{
+      font-weight:700; font-size:clamp(1.8rem,6vw,2.8rem);
+      text-transform:uppercase; letter-spacing:.04em; line-height:1.1;
+    }
+    .tagline{font-size:.8rem; color:var(--muted); letter-spacing:.1em;
+      text-transform:uppercase; margin-top:.4rem;}
+
+    .card{
+      background:var(--surface); border:2px solid var(--dark);
+      border-radius:4px; padding:2rem; margin-bottom:1.5rem;
+    }
+    .card h2{
+      font-size:.75rem; font-weight:700; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted); margin-bottom:1.25rem;
+    }
+
+    /* Unit toggle */
+    .toggle{
+      display:flex; border:2px solid var(--dark);
+      border-radius:4px; overflow:hidden; margin:0 auto 1.5rem;
+      width:fit-content;
+    }
+    .toggle-btn{
+      font-weight:600; font-size:.8rem; letter-spacing:.08em;
+      text-transform:uppercase; padding:.45rem 1.2rem;
+      border:none; cursor:pointer; background:transparent;
+      color:var(--mid); transition:all .15s;
+    }
+    .toggle-btn.active{background:var(--dark); color:#fff;}
+
+    /* Form fields */
+    .field{margin-bottom:1rem;}
+    .field-label{
+      font-weight:600; font-size:.72rem; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted);
+      margin-bottom:.35rem; display:flex; align-items:baseline; gap:.5rem;
+    }
+    .field-unit{font-weight:400; font-size:.65rem; color:var(--border);
+      text-transform:none; letter-spacing:0;}
+    .field-ref{font-weight:400; font-size:.62rem; color:var(--muted);
+      text-transform:none; letter-spacing:0;}
+    input[type=number]{
+      font-size:1.2rem; width:100%; padding:.45rem .65rem;
+      border:2px solid var(--border); border-radius:3px;
+      background:#fafafa; color:var(--dark); transition:border-color .15s;
+    }
+    input[type=number]:focus{outline:none; border-color:var(--dark);}
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+    input[type=number]{-moz-appearance:textfield;}
+
+    /* Result */
+    .result-box{
+      text-align:center; padding:1.5rem; border-radius:4px;
+      background:#fafafa; border:2px solid var(--border);
+      margin-top:.5rem; transition:all .3s;
+    }
+    .result-box.has-result{border-color:var(--dark);}
+    .result-age{
+      font-size:2.8rem; font-weight:800; line-height:1;
+      margin-bottom:.25rem;
+    }
+    .result-label{
+      font-size:.7rem; font-weight:600; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted);
+    }
+    .result-accel{
+      font-size:1.1rem; font-weight:700; margin-top:.6rem;
+    }
+    .result-accel.younger{color:var(--green);}
+    .result-accel.older{color:var(--accent);}
+    .result-mort{
+      font-size:.78rem; color:var(--mid); margin-top:.5rem; line-height:1.5;
+    }
+    .result-placeholder{
+      font-size:.85rem; color:var(--muted); padding:1rem 0;
+    }
+
+    /* Info sections */
+    .info{margin-top:1.5rem;}
+    .info h2{
+      font-size:.85rem; font-weight:700; letter-spacing:.06em;
+      text-transform:uppercase; margin-bottom:.75rem;
+      padding-bottom:.5rem; border-bottom:1px solid var(--border);
+    }
+    .info p, .info li{font-size:.82rem; color:var(--mid); line-height:1.7;}
+    .info p{margin-bottom:.75rem;}
+    .info ul{padding-left:1.2rem; margin-bottom:.75rem;}
+    .info a{color:var(--accent);}
+
+    /* Comparison table */
+    .comparison-table{
+      width:100%; border-collapse:collapse; font-size:.72rem;
+      margin:.75rem 0;
+    }
+    .comparison-table th{
+      font-weight:700; text-transform:uppercase; letter-spacing:.08em;
+      color:var(--muted); text-align:left; padding:.5rem .4rem;
+      border-bottom:2px solid var(--dark); font-size:.65rem;
+    }
+    .comparison-table td{
+      padding:.45rem .4rem; border-bottom:1px solid var(--border);
+      color:var(--mid); vertical-align:top;
+    }
+    .comparison-table tr:last-child td{border-bottom:none;}
+    .comparison-table .model-name{font-weight:600; color:var(--dark);}
+    .tag-open{
+      display:inline-block; font-size:.55rem; font-weight:700;
+      letter-spacing:.08em; text-transform:uppercase;
+      padding:.1rem .35rem; border-radius:2px;
+      background:var(--green); color:#fff;
+    }
+    .tag-closed{
+      display:inline-block; font-size:.55rem; font-weight:700;
+      letter-spacing:.08em; text-transform:uppercase;
+      padding:.1rem .35rem; border-radius:2px;
+      background:var(--muted); color:#fff;
+    }
+    .tag-gone{
+      display:inline-block; font-size:.55rem; font-weight:700;
+      letter-spacing:.08em; text-transform:uppercase;
+      padding:.1rem .35rem; border-radius:2px;
+      background:var(--accent); color:#fff;
+    }
+
+    details{margin-bottom:.75rem;}
+    details summary{
+      font-size:.78rem; font-weight:600; color:var(--dark);
+      cursor:pointer; padding:.3rem 0;
+    }
+    details summary:hover{color:var(--accent);}
+    details[open] summary{margin-bottom:.5rem;}
+  </style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Biological Age</h1>
+    <div class="tagline">PhenoAge Calculator from Blood Tests</div>
+  </header>
+
+  <!-- Unit toggle -->
+  <div class="toggle">
+    <button class="toggle-btn active" onclick="setUnits('us')">US</button>
+    <button class="toggle-btn" onclick="setUnits('si')">SI / European</button>
+  </div>
+
+  <!-- Input card -->
+  <div class="card">
+    <h2>Your Blood Test Values</h2>
+    <div id="form-fields"></div>
+  </div>
+
+  <!-- Result card -->
+  <div class="card">
+    <h2>Result</h2>
+    <div class="result-box" id="result-box">
+      <div class="result-placeholder" id="result-placeholder">
+        Enter all 10 values above to calculate your biological age.
+      </div>
+      <div id="result-content" style="display:none;">
+        <div class="result-label">Phenotypic Age</div>
+        <div class="result-age" id="result-age">—</div>
+        <div class="result-accel" id="result-accel"></div>
+        <div class="result-mort" id="result-mort"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- About section -->
+  <div class="card info">
+    <h2>About PhenoAge</h2>
+    <p>
+      PhenoAge was developed by Morgan Levine and colleagues at Yale, published in
+      <em>Aging</em> (2018). It uses 9 blood biomarkers plus chronological age to estimate
+      a "phenotypic age" that predicts all-cause mortality better than chronological
+      age alone. A one-year increase in PhenoAge (relative to chronological age) is
+      associated with a 9% increase in all-cause mortality risk.
+    </p>
+    <p>
+      The 9 biomarkers are available on a standard CBC (complete blood count) and
+      CMP (comprehensive metabolic panel), with the exception of C-reactive protein
+      (CRP), which must be ordered separately. All inputs are from a routine blood draw.
+    </p>
+    <p>
+      The model was trained on NHANES III (1988–1994) and validated on NHANES IV
+      (1999–2018) with up to 12 years of mortality follow-up.
+    </p>
+    <p style="font-size:.72rem; color:var(--muted);">
+      <strong>Citation:</strong> Levine ME, Lu AT, Quach A, et al. "An epigenetic
+      biomarker of aging for lifespan and healthspan." <em>Aging</em> 2018;10(4):573–591.
+      DOI: <a href="https://doi.org/10.18632/aging.101414">10.18632/aging.101414</a>
+    </p>
+  </div>
+
+  <!-- Other models -->
+  <div class="card info">
+    <h2>Other Mortality & Biological Age Models</h2>
+    <p>
+      PhenoAge is one of several approaches to estimating biological age or
+      mortality risk from clinical data. Here is how it compares to other
+      notable models:
+    </p>
+
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Inputs</th>
+          <th>Type</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="model-name">PhenoAge<br><span style="font-weight:400">Levine et al. 2018</span></td>
+          <td>9 blood markers + age</td>
+          <td>Gompertz mortality → biological age (years)</td>
+          <td><span class="tag-open">Open</span><br>Published coefficients</td>
+        </tr>
+        <tr>
+          <td class="model-name">Bortz Blood Age<br><span style="font-weight:400">Humanity Inc.</span></td>
+          <td>22 blood markers + age</td>
+          <td>Cox PH → biological age acceleration (years)</td>
+          <td><span class="tag-open">Open</span><br>Coefficients public. <a href="/bortz-blood-age.html">Try it →</a></td>
+        </tr>
+        <tr>
+          <td class="model-name">KDM Biological Age<br><span style="font-weight:400">Klemera &amp; Doubal 2006</span></td>
+          <td>Flexible biomarker set</td>
+          <td>Linear regression ensemble → biological age</td>
+          <td><span class="tag-open">Open</span><br>Algorithm published; requires training data</td>
+        </tr>
+        <tr>
+          <td class="model-name">Aging.AI 1.0<br><span style="font-weight:400">Putin et al. 2016</span></td>
+          <td>41 blood markers</td>
+          <td>Ensemble of 21 DNNs → age</td>
+          <td><span class="tag-gone">Offline</span><br>Architecture published, weights not released. Site gone.</td>
+        </tr>
+        <tr>
+          <td class="model-name">Aging.AI 3.0<br><span style="font-weight:400">Mamoshina et al. 2018</span></td>
+          <td>19 blood markers + sex + ethnicity</td>
+          <td>Single DNN → age</td>
+          <td><span class="tag-gone">Offline</span><br>Trained on Korean, Canadian, E. European data. Site gone.</td>
+        </tr>
+        <tr>
+          <td class="model-name">LifeScore Med360<br><span style="font-weight:400">Maier et al. 2020 (MassMutual)</span></td>
+          <td>~60 lab + health history inputs</td>
+          <td>Random survival forest → 0–100 score</td>
+          <td><span class="tag-gone">Offline</span><br>Proprietary. API discontinued.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <details>
+      <summary>About the Aging.AI models</summary>
+      <p>
+        Aging.AI was a free online tool by Insilico Medicine that predicted chronological
+        age from blood tests using deep neural networks. Three versions were released:
+      </p>
+      <ul>
+        <li><strong>v1.0</strong> (2016): Ensemble of 21 DNNs with ElasticNet meta-learner.
+          41 blood markers. Best single DNN: 4 hidden layers (2000→1500→1000→500),
+          PReLU activation, AdaGrad optimizer. r=0.91, MAE=5.55 years.
+          Trained on 62,419 Russian clinical samples.</li>
+        <li><strong>v2.0</strong>: 33 markers, r=0.79, MAE=6.2 years. Never published separately.</li>
+        <li><strong>v3.0</strong> (2018): Single DNN, Leaky ReLU, EVE optimizer. 19 blood markers
+          + sex + population. r=0.80, MAE=5.94 years. Trained on 142,379 samples from
+          South Korea, Canada, and Eastern Europe. Validated on NHANES (R²=0.50).</li>
+      </ul>
+      <p>
+        The site (aging.ai) went offline circa 2024. The model weights were never
+        published — only the architecture descriptions appeared in the papers.
+        Archived versions of the site are available on the
+        <a href="https://web.archive.org/web/20231207110057/http://aging.ai/">Wayback Machine</a>.
+      </p>
+      <p style="font-size:.7rem; color:var(--muted);">
+        v1.0: Putin E et al. "Deep biomarkers of human aging." <em>Aging</em> 2016;8(5):1021–1033.
+        DOI: <a href="https://doi.org/10.18632/aging.100968">10.18632/aging.100968</a><br>
+        v3.0: Mamoshina P et al. "Population specific biomarkers of human aging."
+        <em>J Gerontol A</em> 2018;73(11):1482–1490.
+        DOI: <a href="https://doi.org/10.1093/gerona/gly005">10.1093/gerona/gly005</a>
+      </p>
+    </details>
+
+    <details>
+      <summary>About LifeScore Med360</summary>
+      <p>
+        Developed at MassMutual using 20 years of life insurance application data
+        (~1.5 million records, 23,000 observed deaths). The random survival forest
+        model used ~60 inputs from lab tests and health questionnaires to produce a
+        0–100 life score representing mortality-risk percentile within age/sex/smoking
+        cohorts. It yielded a 9% reduction in claims within the healthiest risk pool
+        compared to traditional underwriting.
+      </p>
+      <p>
+        A consumer-facing tool (MyLifeScore) was publicly available but the API
+        (api.lifescoremodels.com) has been discontinued.
+      </p>
+      <p style="font-size:.7rem; color:var(--muted);">
+        Maier M et al. "Improving the Accuracy and Transparency of Underwriting with
+        Artificial Intelligence." <em>AI Magazine</em> 2020;41(3):78–93.
+      </p>
+    </details>
+
+    <details>
+      <summary>About KDM Biological Age</summary>
+      <p>
+        The Klemera-Doubal method (2006) takes a different approach: it fits
+        linear regressions of each biomarker against age, then combines them
+        into a biological age estimate weighted by each marker's correlation
+        with age. Unlike PhenoAge's fixed coefficients, KDM requires
+        training on a reference population, making it harder to implement as
+        a standalone calculator. It is available in the
+        <a href="https://github.com/dayoonkwon/BioAge">BioAge R package</a>
+        (160+ stars) alongside PhenoAge and homeostatic dysregulation measures.
+      </p>
+      <p style="font-size:.7rem; color:var(--muted);">
+        Klemera P, Doubal S. "A new approach to the concept and computation
+        of biological age." <em>Mech Ageing Dev</em> 2006;127(3):240–248.<br>
+        Kwon D, Belsky DW. "A toolkit for quantification of biological age
+        from blood chemistry and organ function test data: BioAge."
+        <em>GeroScience</em> 2021;43:2795–2808.
+        DOI: <a href="https://doi.org/10.1007/s11357-021-00480-5">10.1007/s11357-021-00480-5</a>
+      </p>
+    </details>
+
+    <details>
+      <summary>About physical activity &amp; mortality</summary>
+      <p>
+        Beyond blood biomarkers, physical activity is a strong predictor of mortality.
+        Fishman et al. (2016) used NHANES accelerometer data (2003–2006, n=3,029
+        adults aged 50–79) to show that those in the highest tertile of total activity
+        had one-fifth the mortality risk of those in the lowest (HR: 0.21). Replacing
+        just 30 minutes of daily sedentary time with light activity was associated
+        with a 20% reduction in mortality risk at 5 years (HR: 0.80).
+      </p>
+      <p style="font-size:.7rem; color:var(--muted);">
+        Fishman EI et al. "Association between Objectively Measured Physical Activity
+        and Mortality in NHANES." <em>Med Sci Sports Exerc</em> 2016;48(7):1303–1311.
+        DOI: <a href="https://doi.org/10.1249/MSS.0000000000000885">10.1249/MSS.0000000000000885</a>
+      </p>
+    </details>
+  </div>
+  <!-- References -->
+  <div class="card info">
+    <h2>References &amp; Source Materials</h2>
+    <p>
+      The papers, spreadsheet, and analysis notes behind this calculator are
+      available in the <a href="references/">references folder</a>.
+    </p>
+    <ul>
+      <li><a href="references/levine2018-phenoage.pdf">Levine et al. 2018</a> —
+        PhenoAge paper (the model implemented here)</li>
+      <li><a href="references/pheno-age-calculator.xls">PhenoAge spreadsheet</a> —
+        Excel calculator by J. Cramer &amp; M. Lustgarten, used to verify our implementation</li>
+      <li><a href="references/aging-ai-v1-putin-2016.pdf">Putin et al. 2016</a> —
+        Aging.AI v1.0 (ensemble of 21 DNNs, 41 blood markers)</li>
+      <li><a href="references/aging-ai-v3-mamoshina-2018.pdf">Mamoshina et al. 2018</a> —
+        Aging.AI v3.0 (multi-population DNN, 19 markers)</li>
+      <li><a href="references/massmutual-med360.pdf">Maier et al. 2020</a> —
+        LifeScore Med360 (MassMutual mortality model)</li>
+      <li><a href="references/fishman2016association.pdf">Fishman et al. 2016</a> —
+        Physical activity &amp; mortality in NHANES</li>
+      <li><a href="references/MODEL-ANALYSIS.md">Model analysis notes</a> —
+        Detailed comparison of Aging.AI architectures, inputs, and performance</li>
+    </ul>
+  </div>
+
+</div>
+
+<script src="/footer.js"></script>
+<script>
+// ── PhenoAge biomarkers ──────────────────────────────────────────────
+// Coefficients from Levine et al. 2018, Table 1.
+// Final-transform constants from the canonical BioAge R package
+// (dayoonkwon/BioAge) and the Cramer/Lustgarten spreadsheet.
+//
+// Each biomarker has US and SI unit definitions.
+// "conv" is the factor that converts the input unit to the internal
+// (SI) unit used by the Gompertz model:  internal = input * conv
+// For CRP the input is converted to mg/dL then log-transformed.
+
+var biomarkers = [
+  {
+    id:'age', label:'Age', coeff:0.0804, log:false,
+    us:{unit:'years',  conv:1, ref:''},
+    si:{unit:'years',  conv:1, ref:''}
+  },
+  {
+    id:'albumin', label:'Albumin', coeff:-0.0336, log:false,
+    us:{unit:'g/dL',   conv:10,     ref:'3.5 – 5.5'},
+    si:{unit:'g/L',    conv:1,      ref:'35 – 55'}
+  },
+  {
+    id:'creatinine', label:'Creatinine', coeff:0.0095, log:false,
+    us:{unit:'mg/dL',  conv:88.4,   ref:'0.6 – 1.2'},
+    si:{unit:'µmol/L', conv:1,      ref:'53 – 106'}
+  },
+  {
+    id:'glucose', label:'Glucose', coeff:0.1953, log:false,
+    us:{unit:'mg/dL',  conv:0.0555, ref:'65 – 99'},
+    si:{unit:'mmol/L', conv:1,      ref:'3.6 – 5.5'}
+  },
+  {
+    id:'crp', label:'C-Reactive Protein', coeff:0.0954, log:true,
+    // log:true means the value is ln-transformed after converting to mg/dL
+    us:{unit:'mg/L',   conv:0.1,    ref:'< 3.0'},
+    si:{unit:'mg/L',   conv:0.1,    ref:'< 3.0'}
+    // CRP: mg/L * 0.1 = mg/dL, then take ln()
+  },
+  {
+    id:'wbc', label:'White Blood Cells', coeff:0.0554, log:false,
+    us:{unit:'10³/µL', conv:1,      ref:'4.0 – 11.0'},
+    si:{unit:'10⁹/L',  conv:1,      ref:'4.0 – 11.0'}
+  },
+  {
+    id:'lymph', label:'Lymphocyte %', coeff:-0.012, log:false,
+    us:{unit:'%',      conv:1,      ref:'20 – 40'},
+    si:{unit:'%',      conv:1,      ref:'20 – 40'}
+  },
+  {
+    id:'mcv', label:'Mean Cell Volume', coeff:0.0268, log:false,
+    us:{unit:'fL',     conv:1,      ref:'80 – 100'},
+    si:{unit:'fL',     conv:1,      ref:'80 – 100'}
+  },
+  {
+    id:'rdw', label:'Red Cell Distribution Width', coeff:0.3306, log:false,
+    us:{unit:'%',      conv:1,      ref:'11.5 – 14.5'},
+    si:{unit:'%',      conv:1,      ref:'11.5 – 14.5'}
+  },
+  {
+    id:'alp', label:'Alkaline Phosphatase', coeff:0.0019, log:false,
+    us:{unit:'U/L',    conv:1,      ref:'44 – 147'},
+    si:{unit:'U/L',    conv:1,      ref:'44 – 147'}
+  }
+];
+
+// Gompertz model constants
+var B0    = -19.9067;
+var GAMMA =  0.0076927;
+// Final transform: phenoAge = ln(A * ln(1 - mortScore)) / B + C
+// Constants from Levine et al. 2018, Supplementary 1, confirmed by
+// the authors (see github.com/ajsteele/bioage/issues/3).
+// Note: the BioAge R package has -0.0055305 / 0.09165 which are WRONG.
+var FA = -0.00553;
+var FB =  0.090165;
+var FC =  141.50225;
+
+var currentUnits = 'us';
+
+function setUnits(u) {
+  currentUnits = u;
+  document.querySelectorAll('.toggle-btn').forEach(function(b){
+    b.classList.toggle('active', b.textContent.trim().toLowerCase().indexOf(u) !== -1
+      || (u === 'us' && b.textContent.trim() === 'US')
+      || (u === 'si' && b.textContent.trim().indexOf('SI') !== -1));
+  });
+  // Re-render form but preserve values
+  var vals = {};
+  biomarkers.forEach(function(bm){
+    var el = document.getElementById('inp-'+bm.id);
+    if(el && el.value !== '') vals[bm.id] = el.value;
+  });
+  buildForm();
+  biomarkers.forEach(function(bm){
+    if(vals[bm.id] !== undefined) {
+      document.getElementById('inp-'+bm.id).value = vals[bm.id];
+    }
+  });
+  calculate();
+}
+
+function buildForm() {
+  var html = '';
+  biomarkers.forEach(function(bm){
+    var u = bm[currentUnits];
+    html += '<div class="field">';
+    html += '<div class="field-label">' + bm.label;
+    html += ' <span class="field-unit">' + u.unit + '</span>';
+    if(u.ref) html += ' <span class="field-ref">ref: ' + u.ref + '</span>';
+    html += '</div>';
+    html += '<input type="number" id="inp-' + bm.id + '" step="any" '
+          + 'placeholder="—" oninput="calculate()">';
+    html += '</div>';
+  });
+  document.getElementById('form-fields').innerHTML = html;
+}
+
+function calculate() {
+  var allFilled = true;
+  var xb = B0;
+
+  biomarkers.forEach(function(bm){
+    var el = document.getElementById('inp-'+bm.id);
+    var raw = parseFloat(el ? el.value : '');
+    if(isNaN(raw)) { allFilled = false; return; }
+
+    var u = bm[currentUnits];
+    var val;
+    if(bm.log) {
+      // CRP: convert to mg/dL then ln
+      val = Math.log(raw * u.conv);
+    } else {
+      val = raw * u.conv;
+    }
+    xb += bm.coeff * val;
+  });
+
+  var placeholder = document.getElementById('result-placeholder');
+  var content = document.getElementById('result-content');
+  var box = document.getElementById('result-box');
+
+  if(!allFilled) {
+    placeholder.style.display = '';
+    content.style.display = 'none';
+    box.classList.remove('has-result');
+    return;
+  }
+
+  // Mortality score (10-year, 120 months)
+  var mortScore = 1 - Math.exp(
+    -Math.exp(xb) * (Math.exp(120 * GAMMA) - 1) / GAMMA
+  );
+
+  // Phenotypic age
+  var phenoAge = Math.log(FA * Math.log(1 - mortScore)) / FB + FC;
+
+  // 1-year mortality risk
+  var risk1y = 1 - Math.exp(
+    -Math.exp(xb) * (Math.exp(12 * GAMMA) - 1) / GAMMA
+  );
+
+  var chronAge = parseFloat(document.getElementById('inp-age').value);
+  var accel = phenoAge - chronAge;
+
+  placeholder.style.display = 'none';
+  content.style.display = '';
+  box.classList.add('has-result');
+
+  document.getElementById('result-age').textContent = phenoAge.toFixed(1);
+
+  var accelEl = document.getElementById('result-accel');
+  if(accel < -0.5) {
+    accelEl.className = 'result-accel younger';
+    accelEl.textContent = Math.abs(accel).toFixed(1) + ' years younger than chronological age';
+  } else if(accel > 0.5) {
+    accelEl.className = 'result-accel older';
+    accelEl.textContent = accel.toFixed(1) + ' years older than chronological age';
+  } else {
+    accelEl.className = 'result-accel';
+    accelEl.style.color = 'var(--mid)';
+    accelEl.textContent = 'Equal to chronological age (±0.5y)';
+  }
+
+  var odds = 1 / risk1y;
+  document.getElementById('result-mort').textContent =
+    '10-year mortality score: ' + (mortScore * 100).toFixed(2) + '%. '
+    + 'Estimated 1-year risk: ' + (risk1y * 100).toFixed(3) + '% '
+    + '(≈ 1 in ' + Math.round(odds).toLocaleString() + ').';
+}
+
+// ── Bookmark support via URL hash ────────────────────────────────────
+function saveToHash() {
+  var parts = [];
+  biomarkers.forEach(function(bm){
+    var el = document.getElementById('inp-'+bm.id);
+    if(el && el.value !== '') parts.push(bm.id + '=' + el.value);
+  });
+  if(parts.length > 0) {
+    parts.push('u=' + currentUnits);
+    history.replaceState(null, '', '#' + parts.join(';'));
+  }
+}
+
+function loadFromHash() {
+  var hash = location.hash.replace('#','');
+  if(!hash) return;
+  var pairs = {};
+  hash.split(';').forEach(function(p){
+    var kv = p.split('=');
+    if(kv.length === 2) pairs[kv[0]] = kv[1];
+  });
+  if(pairs.u) {
+    currentUnits = pairs.u;
+    document.querySelectorAll('.toggle-btn').forEach(function(b){
+      b.classList.toggle('active',
+        (currentUnits === 'us' && b.textContent.trim() === 'US') ||
+        (currentUnits === 'si' && b.textContent.trim().indexOf('SI') !== -1));
+    });
+  }
+  buildForm();
+  biomarkers.forEach(function(bm){
+    if(pairs[bm.id] !== undefined) {
+      document.getElementById('inp-'+bm.id).value = pairs[bm.id];
+    }
+  });
+  calculate();
+}
+
+// Override calculate to also save hash
+var _origCalc = calculate;
+calculate = function() {
+  _origCalc();
+  saveToHash();
+};
+
+// Init
+buildForm();
+loadFromHash();
+</script>
+</body>
+</html>

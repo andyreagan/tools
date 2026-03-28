@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bortz Blood Age Calculator</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+      --mid:#666; --muted:#999; --border:#ddd; --accent:#e74c3c;
+      --green:#27ae60; --gold:#f39c12;
+    }
+    body{
+      font-family:system-ui,sans-serif;
+      background:var(--bg); color:var(--dark);
+      min-height:100vh; padding:2rem 1rem;
+    }
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0;
+      background-image:repeating-linear-gradient(
+        45deg, transparent, transparent 20px,
+        rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+      );
+    }
+    .page{max-width:640px; margin:0 auto; position:relative; z-index:1;}
+
+    header{margin-bottom:2rem; text-align:center;}
+    h1{
+      font-weight:700; font-size:clamp(1.8rem,6vw,2.8rem);
+      text-transform:uppercase; letter-spacing:.04em; line-height:1.1;
+    }
+    .tagline{font-size:.8rem; color:var(--muted); letter-spacing:.1em;
+      text-transform:uppercase; margin-top:.4rem;}
+
+    .card{
+      background:var(--surface); border:2px solid var(--dark);
+      border-radius:4px; padding:2rem; margin-bottom:1.5rem;
+    }
+    .card h2{
+      font-size:.75rem; font-weight:700; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted); margin-bottom:1.25rem;
+    }
+
+    /* Unit toggle */
+    .toggle{
+      display:flex; border:2px solid var(--dark);
+      border-radius:4px; overflow:hidden; margin:0 auto 1.5rem;
+      width:fit-content;
+    }
+    .toggle-btn{
+      font-weight:600; font-size:.8rem; letter-spacing:.08em;
+      text-transform:uppercase; padding:.45rem 1.2rem;
+      border:none; cursor:pointer; background:transparent;
+      color:var(--mid); transition:all .15s;
+    }
+    .toggle-btn.active{background:var(--dark); color:#fff;}
+
+    /* Form fields */
+    .field{margin-bottom:1rem;}
+    .field-label{
+      font-weight:600; font-size:.72rem; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted);
+      margin-bottom:.35rem; display:flex; align-items:baseline; gap:.5rem;
+      flex-wrap:wrap;
+    }
+    .field-unit{font-weight:400; font-size:.65rem; color:var(--border);
+      text-transform:none; letter-spacing:0;}
+    .field-ref{font-weight:400; font-size:.62rem; color:var(--muted);
+      text-transform:none; letter-spacing:0;}
+    .field-required{
+      font-weight:700; font-size:.55rem; color:var(--accent);
+      text-transform:uppercase; letter-spacing:.06em;
+    }
+    input[type=number]{
+      font-size:1.2rem; width:100%; padding:.45rem .65rem;
+      border:2px solid var(--border); border-radius:3px;
+      background:#fafafa; color:var(--dark); transition:border-color .15s;
+    }
+    input[type=number]:focus{outline:none; border-color:var(--dark);}
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+    input[type=number]{-moz-appearance:textfield;}
+
+    .section-divider{
+      font-size:.65rem; font-weight:700; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--mid);
+      margin:1.5rem 0 1rem; padding-bottom:.4rem;
+      border-bottom:1px solid var(--border);
+    }
+
+    /* Result */
+    .result-box{
+      text-align:center; padding:1.5rem; border-radius:4px;
+      background:#fafafa; border:2px solid var(--border);
+      margin-top:.5rem; transition:all .3s;
+    }
+    .result-box.has-result{border-color:var(--dark);}
+    .result-age{
+      font-size:2.8rem; font-weight:800; line-height:1;
+      margin-bottom:.25rem;
+    }
+    .result-label{
+      font-size:.7rem; font-weight:600; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--muted);
+    }
+    .result-accel{
+      font-size:1.1rem; font-weight:700; margin-top:.6rem;
+    }
+    .result-accel.younger{color:var(--green);}
+    .result-accel.older{color:var(--accent);}
+    .result-detail{
+      font-size:.78rem; color:var(--mid); margin-top:.5rem; line-height:1.5;
+    }
+    .result-placeholder{
+      font-size:.85rem; color:var(--muted); padding:1rem 0;
+    }
+
+    /* Contribution bars */
+    .contributions{margin-top:1.25rem; text-align:left;}
+    .contributions h3{
+      font-size:.65rem; font-weight:700; letter-spacing:.1em;
+      text-transform:uppercase; color:var(--muted); margin-bottom:.75rem;
+    }
+    .contrib-row{
+      display:flex; align-items:center; gap:.5rem;
+      margin-bottom:.35rem; font-size:.72rem;
+    }
+    .contrib-name{width:110px; text-align:right; color:var(--mid);
+      flex-shrink:0; font-size:.65rem;}
+    .contrib-bar-wrap{flex:1; height:12px; background:#f0f0f0;
+      border-radius:2px; position:relative; overflow:hidden;}
+    .contrib-bar{height:100%; border-radius:2px; position:absolute; top:0;}
+    .contrib-bar.positive{background:var(--accent); left:50%;}
+    .contrib-bar.negative{background:var(--green); right:50%;}
+    .contrib-val{width:50px; font-size:.62rem; color:var(--mid);
+      font-weight:600; flex-shrink:0;}
+    .contrib-midline{
+      position:absolute; left:50%; top:0; bottom:0;
+      width:1px; background:var(--border);
+    }
+
+    /* Info sections */
+    .info{margin-top:1.5rem;}
+    .info h2{
+      font-size:.85rem; font-weight:700; letter-spacing:.06em;
+      text-transform:uppercase; margin-bottom:.75rem;
+      padding-bottom:.5rem; border-bottom:1px solid var(--border);
+    }
+    .info p, .info li{font-size:.82rem; color:var(--mid); line-height:1.7;}
+    .info p{margin-bottom:.75rem;}
+    .info ul{padding-left:1.2rem; margin-bottom:.75rem;}
+    .info a{color:var(--accent);}
+  </style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Bortz Blood Age</h1>
+    <div class="tagline">Biological Age from 22 Blood Biomarkers</div>
+  </header>
+
+  <!-- Unit toggle -->
+  <div class="toggle">
+    <button class="toggle-btn" onclick="setUnits('us')">US</button>
+    <button class="toggle-btn active" onclick="setUnits('si')">SI / European</button>
+  </div>
+
+  <!-- Input card -->
+  <div class="card">
+    <h2>Your Blood Test Values</h2>
+    <div id="form-fields"></div>
+  </div>
+
+  <!-- Result card -->
+  <div class="card">
+    <h2>Result</h2>
+    <div class="result-box" id="result-box">
+      <div class="result-placeholder" id="result-placeholder">
+        Enter age + at least the 7 core biomarkers (marked <span style="color:var(--accent)">required</span>) to calculate.
+      </div>
+      <div id="result-content" style="display:none;">
+        <div class="result-label">Bortz Blood Age</div>
+        <div class="result-age" id="result-age">—</div>
+        <div class="result-accel" id="result-accel"></div>
+        <div class="result-detail" id="result-detail"></div>
+        <div class="contributions" id="contributions"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- About section -->
+  <div class="card info">
+    <h2>About Bortz Blood Age</h2>
+    <p>
+      Bortz Blood Age is a biological age model developed by
+      <a href="https://www.humanity.health">Humanity Inc.</a> and implemented by
+      Zsolt Szabo at <a href="https://www.longevity-tools.com/humanitys-bortz-blood-age">longevity-tools.com</a>.
+      It uses up to 22 biomarkers from standard blood panels to estimate
+      biological age acceleration.
+    </p>
+    <p>
+      The model was trained on <strong>306,000 individuals</strong> from the
+      <strong>UK Biobank</strong> (adults aged 38–73) using a Cox proportional
+      hazards framework. It reports an <strong>11% relative increase in
+      predictive value</strong> over the Levine PhenoAge model.
+    </p>
+    <p>
+      Unlike PhenoAge (which uses a Gompertz mortality model), Bortz computes
+      a <em>Biological Age Acceleration</em> (BAA) score by centering each
+      biomarker around the population mean, weighting by trained coefficients,
+      and summing. The result is added to your chronological age to get your
+      Bortz Blood Age.
+    </p>
+    <p>
+      The model works best with all 22 biomarkers but can produce a result
+      with just 7 core markers (creatinine, cystatin C, GGT, RDW, ALT,
+      vitamin D, and age). Missing optional biomarkers are assumed to be
+      at the population mean (contributing zero to the score).
+    </p>
+    <p style="font-size:.72rem; color:var(--muted);">
+      <strong>Note:</strong> The model was trained on adults aged 38–73. Outside
+      this range, accuracy decreases and results may overestimate biological age,
+      especially after age 80.
+    </p>
+  </div>
+
+  <!-- Comparison back to PhenoAge -->
+  <div class="card info">
+    <h2>Bortz vs PhenoAge</h2>
+    <p>
+      Both models estimate biological age from blood tests, but they differ
+      in important ways:
+    </p>
+    <ul>
+      <li><strong>PhenoAge</strong> uses 9 biomarkers + age with a Gompertz
+        mortality model (Levine et al. 2018, NHANES, ~10k individuals).
+        <a href="biological-age/">Try it here →</a></li>
+      <li><strong>Bortz Blood Age</strong> uses 22 biomarkers + age with a
+        Cox proportional hazards model (Humanity Inc., UK Biobank, ~306k
+        individuals).</li>
+    </ul>
+    <p>
+      Both share several biomarkers (albumin, creatinine, CRP, ALP, MCV,
+      RDW, lymphocytes, glucose) but Bortz adds cystatin C, GGT, HbA1c,
+      cholesterol, urea, RBC, ALT, SHBG, vitamin D, MCH, ApoA1, and
+      monocyte/neutrophil counts.
+    </p>
+  </div>
+</div>
+
+<script src="/footer.js"></script>
+<script>
+// ── Bortz Blood Age Model ────────────────────────────────────────────
+// Coefficients extracted from Humanity Inc.'s public implementation at
+// longevity-tools.com. The model uses BAACoefficients (Biological Age
+// Acceleration) trained on the UK Biobank (~306k individuals).
+//
+// For each biomarker:
+//   centeredValue = (transform(value) or value) - featureMean
+//   score = centeredValue * BAACoefficient
+//   BAA = 10 * sum(scores)  [excluding age]
+//   Bortz Blood Age = chronological age + BAA
+
+var biomarkers = [
+  {
+    id:'age', label:'Age', BAA:0, required:true,
+    featureMean:56.0487752, transform:null,
+    si:{unit:'years', conv:1, ref:''},
+    us:{unit:'years', conv:1, ref:''}
+  },
+  // ── Required biomarkers ──
+  {
+    id:'creatinine', label:'Creatinine', BAA:-0.01095746, required:true,
+    featureMean:71.565605, transform:null,
+    si:{unit:'µmol/L', conv:1,     ref:'53 – 106'},
+    us:{unit:'mg/dL',  conv:88.4,  ref:'0.6 – 1.2'}
+  },
+  {
+    id:'cystatin', label:'Cystatin C', BAA:1.859556436, required:true,
+    featureMean:0.900946, transform:null,
+    si:{unit:'mg/L', conv:1,   ref:'0.6 – 1.0'},
+    us:{unit:'mg/L', conv:1,   ref:'0.6 – 1.0'}
+  },
+  {
+    id:'ggt', label:'GGT (γ-GT)', BAA:0.265550311, required:true,
+    featureMean:3.3795613, transform:'log',
+    si:{unit:'IU/L', conv:1, ref:'9 – 48'},
+    us:{unit:'IU/L', conv:1, ref:'9 – 48'}
+  },
+  {
+    id:'rdw', label:'Red Cell Distribution Width', BAA:0.202009895, required:true,
+    featureMean:13.4342296, transform:null,
+    si:{unit:'%', conv:1, ref:'11.5 – 14.5'},
+    us:{unit:'%', conv:1, ref:'11.5 – 14.5'}
+  },
+  {
+    id:'alt', label:'ALT', BAA:-0.312442261, required:true,
+    featureMean:3.077868, transform:'log',
+    si:{unit:'IU/L', conv:1,      ref:'7 – 56'},
+    us:{unit:'IU/L', conv:1,      ref:'7 – 56'}
+  },
+  {
+    id:'vitd', label:'Vitamin D (25-OH)', BAA:-0.265467867, required:true,
+    featureMean:3.6052878, transform:'log',
+    si:{unit:'nmol/L', conv:1,    ref:'50 – 125'},
+    us:{unit:'ng/mL',  conv:2.496, ref:'20 – 50'}
+  },
+  // ── Optional biomarkers ──
+  {
+    id:'albumin', label:'Albumin', BAA:-0.011331946, required:false,
+    featureMean:45.1238763, transform:null,
+    si:{unit:'g/L',  conv:1,  ref:'35 – 55'},
+    us:{unit:'g/dL', conv:10, ref:'3.5 – 5.5'}
+  },
+  {
+    id:'alp', label:'Alkaline Phosphatase', BAA:0.00164946, required:false,
+    featureMean:82.6847975, transform:null,
+    si:{unit:'IU/L', conv:1, ref:'44 – 147'},
+    us:{unit:'IU/L', conv:1, ref:'44 – 147'}
+  },
+  {
+    id:'urea', label:'Urea (BUN)', BAA:-0.029554872, required:false,
+    featureMean:5.3547152, transform:null,
+    si:{unit:'mmol/L', conv:1,     ref:'2.1 – 7.1'},
+    us:{unit:'mg/dL',  conv:0.357, ref:'6 – 20'}
+  },
+  {
+    id:'cholesterol', label:'Total Cholesterol', BAA:-0.0805656, required:false,
+    featureMean:5.6177437, transform:null,
+    si:{unit:'mmol/L', conv:1,       ref:'3.5 – 6.5'},
+    us:{unit:'mg/dL',  conv:0.02586, ref:'135 – 250'}
+  },
+  {
+    id:'hba1c', label:'HbA1c', BAA:0.018116675, required:false,
+    featureMean:35.4785711, transform:null,
+    si:{unit:'mmol/mol', conv:1, ref:'20 – 42'},
+    us:{unit:'%',        conv:0, ref:'4.0 – 6.0'}
+    // US HbA1c % → mmol/mol: (% − 2.15) × 10.929 (affine, handled in getInternalValue)
+  },
+  {
+    id:'hscrp', label:'hs-CRP', BAA:0.079109916, required:false,
+    featureMean:0.3003624, transform:'log',
+    si:{unit:'mg/L', conv:1, ref:'< 3.0'},
+    us:{unit:'mg/L', conv:1, ref:'< 3.0'}
+  },
+  {
+    id:'rbc', label:'Red Blood Cell Count', BAA:-0.204442153, required:false,
+    featureMean:4.4994648, transform:null,
+    si:{unit:'×10¹²/L', conv:1, ref:'4.0 – 5.5'},
+    us:{unit:'M/µL',     conv:1, ref:'4.0 – 5.5'}
+  },
+  {
+    id:'mcv', label:'Mean Cell Volume', BAA:0.017165356, required:false,
+    featureMean:91.9251099, transform:null,
+    si:{unit:'fL', conv:1, ref:'80 – 100'},
+    us:{unit:'fL', conv:1, ref:'80 – 100'}
+  },
+  {
+    id:'monoabs', label:'Monocytes (Absolute)', BAA:0.36937314, required:false,
+    featureMean:0.4746987, transform:null,
+    si:{unit:'×10⁹/L', conv:1,    ref:'0.2 – 0.8'},
+    us:{unit:'10³/µL',  conv:1,    ref:'0.2 – 0.8'}
+  },
+  {
+    id:'neuabs', label:'Neutrophils (Absolute)', BAA:0.06679092, required:false,
+    featureMean:4.1849454, transform:null,
+    si:{unit:'×10⁹/L', conv:1,    ref:'1.8 – 7.7'},
+    us:{unit:'10³/µL',  conv:1,    ref:'1.8 – 7.7'}
+  },
+  {
+    id:'lym', label:'Lymphocyte %', BAA:-0.0108158, required:false,
+    featureMean:28.5817604, transform:null,
+    si:{unit:'%', conv:1, ref:'20 – 40'},
+    us:{unit:'%', conv:1, ref:'20 – 40'}
+  },
+  {
+    id:'shbg', label:'SHBG', BAA:0.292323186, required:false,
+    featureMean:3.8202787, transform:'log',
+    si:{unit:'nmol/L', conv:1, ref:'20 – 130'},
+    us:{unit:'nmol/L', conv:1, ref:'20 – 130'}
+  },
+  {
+    id:'glucose', label:'Glucose', BAA:0.032171478, required:false,
+    featureMean:4.9563054, transform:null,
+    si:{unit:'mmol/L', conv:1,      ref:'3.6 – 5.5'},
+    us:{unit:'mg/dL',  conv:0.0555, ref:'65 – 99'}
+  },
+  {
+    id:'mch', label:'MCH', BAA:0.02746487, required:false,
+    featureMean:31.8396206, transform:null,
+    si:{unit:'pg', conv:1, ref:'27 – 33'},
+    us:{unit:'pg', conv:1, ref:'27 – 33'}
+  },
+  {
+    id:'apoa1', label:'Apolipoprotein A1', BAA:-0.185139395, required:false,
+    featureMean:1.5238771, transform:null,
+    si:{unit:'g/L',   conv:1,     ref:'1.0 – 2.0'},
+    us:{unit:'mg/dL', conv:0.01,  ref:'100 – 200'}
+  }
+];
+
+var currentUnits = 'si';
+
+function setUnits(u) {
+  currentUnits = u;
+  document.querySelectorAll('.toggle-btn').forEach(function(b){
+    b.classList.toggle('active',
+      (u === 'us' && b.textContent.trim() === 'US') ||
+      (u === 'si' && b.textContent.trim().indexOf('SI') !== -1));
+  });
+  var vals = {};
+  biomarkers.forEach(function(bm){
+    var el = document.getElementById('inp-'+bm.id);
+    if(el && el.value !== '') vals[bm.id] = el.value;
+  });
+  buildForm();
+  biomarkers.forEach(function(bm){
+    if(vals[bm.id] !== undefined) {
+      document.getElementById('inp-'+bm.id).value = vals[bm.id];
+    }
+  });
+  calculate();
+}
+
+function buildForm() {
+  var html = '';
+  var lastRequired = null;
+  biomarkers.forEach(function(bm){
+    // Section headers
+    if(bm.id === 'age') {
+      // no header before age
+    } else if(bm.required && lastRequired !== true && bm.id === 'creatinine') {
+      html += '<div class="section-divider">Core Biomarkers (Required)</div>';
+    } else if(!bm.required && lastRequired === true) {
+      html += '<div class="section-divider">Additional Biomarkers (Optional)</div>';
+    }
+    if(bm.id !== 'age') lastRequired = bm.required;
+
+    var u = bm[currentUnits];
+    html += '<div class="field">';
+    html += '<div class="field-label">' + bm.label;
+    html += ' <span class="field-unit">' + u.unit + '</span>';
+    if(u.ref) html += ' <span class="field-ref">ref: ' + u.ref + '</span>';
+    if(bm.required && bm.id !== 'age') html += ' <span class="field-required">required</span>';
+    html += '</div>';
+    html += '<input type="number" id="inp-' + bm.id + '" step="any" '
+          + 'placeholder="—" oninput="calculate()">';
+    html += '</div>';
+  });
+  document.getElementById('form-fields').innerHTML = html;
+}
+
+function getInternalValue(bm, raw) {
+  var u = bm[currentUnits];
+  var val;
+
+  // Special handling for HbA1c US (%) → SI (mmol/mol) via IFCC formula
+  if(bm.id === 'hba1c' && currentUnits === 'us') {
+    val = (raw - 2.15) * 10.929;
+  } else {
+    val = raw * u.conv;
+  }
+
+  // Apply transform
+  if(bm.transform === 'log') {
+    val = Math.log(val);
+  }
+  return val;
+}
+
+function calculate() {
+  var ageEl = document.getElementById('inp-age');
+  var chronAge = parseFloat(ageEl ? ageEl.value : '');
+  if(isNaN(chronAge)) {
+    showPlaceholder();
+    return;
+  }
+
+  // Check required biomarkers
+  var missingRequired = false;
+  biomarkers.forEach(function(bm){
+    if(!bm.required) return;
+    var el = document.getElementById('inp-'+bm.id);
+    var raw = parseFloat(el ? el.value : '');
+    if(isNaN(raw)) missingRequired = true;
+  });
+
+  if(missingRequired) {
+    showPlaceholder();
+    return;
+  }
+
+  // Calculate scores for all provided biomarkers
+  var scores = [];
+  var totalBAA = 0;
+
+  biomarkers.forEach(function(bm){
+    if(bm.id === 'age') return; // age is not a BAA contributor
+
+    var el = document.getElementById('inp-'+bm.id);
+    var raw = parseFloat(el ? el.value : '');
+
+    if(isNaN(raw)) {
+      // Missing optional: contributes 0
+      scores.push({id:bm.id, label:bm.label, score:0, provided:false});
+      return;
+    }
+
+    var internal = getInternalValue(bm, raw);
+    var centered = internal - bm.featureMean;
+    var score = centered * bm.BAA;
+
+    scores.push({id:bm.id, label:bm.label, score:score, provided:true});
+    totalBAA += score;
+  });
+
+  var BAA = 10 * totalBAA;
+  var bortzAge = chronAge + BAA;
+
+  // Display result
+  var placeholder = document.getElementById('result-placeholder');
+  var content = document.getElementById('result-content');
+  var box = document.getElementById('result-box');
+
+  placeholder.style.display = 'none';
+  content.style.display = '';
+  box.classList.add('has-result');
+
+  document.getElementById('result-age').textContent = bortzAge.toFixed(1);
+
+  var accelEl = document.getElementById('result-accel');
+  if(BAA < -0.5) {
+    accelEl.className = 'result-accel younger';
+    accelEl.textContent = Math.abs(BAA).toFixed(1) + ' years younger than chronological age';
+  } else if(BAA > 0.5) {
+    accelEl.className = 'result-accel older';
+    accelEl.textContent = BAA.toFixed(1) + ' years older than chronological age';
+  } else {
+    accelEl.className = 'result-accel';
+    accelEl.style.color = 'var(--mid)';
+    accelEl.textContent = 'Equal to chronological age (±0.5y)';
+  }
+
+  var filledCount = scores.filter(function(s){return s.provided;}).length;
+  document.getElementById('result-detail').textContent =
+    'BAA (Biological Age Acceleration): ' + (BAA >= 0 ? '+' : '') + BAA.toFixed(2) + ' years. '
+    + 'Using ' + filledCount + ' of 21 biomarkers'
+    + (filledCount < 21 ? ' (missing markers assumed at population mean).' : '.');
+
+  // Contribution bars
+  var provided = scores.filter(function(s){return s.provided;});
+  provided.sort(function(a,b){return Math.abs(b.score) - Math.abs(a.score);});
+
+  var maxAbs = 0;
+  provided.forEach(function(s){
+    var a = Math.abs(s.score * 10);
+    if(a > maxAbs) maxAbs = a;
+  });
+  if(maxAbs < 0.01) maxAbs = 1;
+
+  var chtml = '<h3>Biomarker Contributions to BAA</h3>';
+  provided.forEach(function(s){
+    var years = s.score * 10;
+    var pct = Math.abs(years) / maxAbs * 50; // max 50% of bar width
+    var cls = years >= 0 ? 'positive' : 'negative';
+    var sign = years >= 0 ? '+' : '';
+    chtml += '<div class="contrib-row">';
+    chtml += '<div class="contrib-name">' + s.label + '</div>';
+    chtml += '<div class="contrib-bar-wrap"><div class="contrib-midline"></div>';
+    chtml += '<div class="contrib-bar ' + cls + '" style="width:' + pct.toFixed(1) + '%"></div>';
+    chtml += '</div>';
+    chtml += '<div class="contrib-val">' + sign + years.toFixed(2) + 'y</div>';
+    chtml += '</div>';
+  });
+  document.getElementById('contributions').innerHTML = chtml;
+}
+
+function showPlaceholder() {
+  document.getElementById('result-placeholder').style.display = '';
+  document.getElementById('result-content').style.display = 'none';
+  document.getElementById('result-box').classList.remove('has-result');
+}
+
+// ── Bookmark support via URL hash ────────────────────────────────────
+function saveToHash() {
+  var parts = [];
+  biomarkers.forEach(function(bm){
+    var el = document.getElementById('inp-'+bm.id);
+    if(el && el.value !== '') parts.push(bm.id + '=' + el.value);
+  });
+  if(parts.length > 0) {
+    parts.push('u=' + currentUnits);
+    history.replaceState(null, '', '#' + parts.join(';'));
+  }
+}
+
+function loadFromHash() {
+  var hash = location.hash.replace('#','');
+  if(!hash) return;
+  var pairs = {};
+  hash.split(';').forEach(function(p){
+    var kv = p.split('=');
+    if(kv.length === 2) pairs[kv[0]] = kv[1];
+  });
+  if(pairs.u) {
+    currentUnits = pairs.u;
+    document.querySelectorAll('.toggle-btn').forEach(function(b){
+      b.classList.toggle('active',
+        (currentUnits === 'us' && b.textContent.trim() === 'US') ||
+        (currentUnits === 'si' && b.textContent.trim().indexOf('SI') !== -1));
+    });
+  }
+  buildForm();
+  biomarkers.forEach(function(bm){
+    if(pairs[bm.id] !== undefined) {
+      document.getElementById('inp-'+bm.id).value = pairs[bm.id];
+    }
+  });
+  calculate();
+}
+
+var _origCalc = calculate;
+calculate = function() {
+  _origCalc();
+  saveToHash();
+};
+
+// Init
+buildForm();
+loadFromHash();
+</script>
+</body>
+</html>
