@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Combine GPX Rides</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+      --mid:#666; --muted:#999; --border:#ddd;
+      --red:#c0392b; --accent:#e74c3c;
+    }
+    body{
+      font-family:system-ui,sans-serif;
+      background:var(--bg); color:var(--dark);
+      min-height:100vh; display:flex; flex-direction:column;
+      align-items:center; padding:2rem 1rem;
+    }
+    /* diagonal stripe background */
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0;
+      background-image:repeating-linear-gradient(
+        45deg, transparent, transparent 20px,
+        rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+      );
+    }
+
+    .page{position:relative;z-index:1;width:min(620px,100%);margin:auto 0;}
+
+    header{margin-bottom:2rem; text-align:center;}
+    h1{
+      font-weight:700;
+      font-size:clamp(2.2rem,7vw,3.5rem); text-transform:uppercase;
+      letter-spacing:.04em; line-height:1;
+    }
+    h1 .plus{color:var(--accent); margin:0 .15em;}
+    .tagline{font-size:.8rem; color:var(--muted); letter-spacing:.1em; text-transform:uppercase; margin-top:.4rem;}
+
+    .card{
+      background:var(--surface); border:2px solid var(--dark);
+      border-radius:4px; padding:2rem;
+    }
+    .card + .card{margin-top:1.25rem;}
+
+    /* Drop zone */
+    #drop{
+      border:2px dashed var(--border); border-radius:4px;
+      padding:2rem 1rem; text-align:center; cursor:pointer;
+      background:#fafafa; color:var(--mid);
+      transition:border-color .15s, background .15s;
+    }
+    #drop:hover, #drop:focus{outline:none; border-color:var(--dark);}
+    #drop.over{border-color:var(--accent); background:rgba(231,76,60,.06);}
+    #drop strong{color:var(--dark);}
+    #picked{margin-top:.6rem; font-size:.8rem; color:var(--muted);}
+    input[type=file]{display:none;}
+
+    /* Options */
+    .section-label{
+      font-weight:600; font-size:.75rem; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--mid);
+      margin:1.75rem 0 .75rem;
+    }
+    .section-label:first-child{margin-top:0;}
+    label.opt{display:flex; align-items:flex-start; gap:.55rem; margin:.5rem 0; line-height:1.4;}
+    label.opt input{margin-top:.15rem;}
+    .row{display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;}
+    input[type=number], input[type=text], select{
+      font-size:1rem; padding:.4rem .6rem;
+      border:2px solid var(--border); border-radius:3px;
+      background:#fafafa; color:var(--dark);
+      transition:border-color .15s;
+    }
+    input:focus, select:focus{outline:none; border-color:var(--dark);}
+    input[type=number]{width:6rem;}
+    .hint{font-size:.72rem; color:var(--muted); line-height:1.6; margin-top:.5rem;}
+
+    /* Action row */
+    .actions{display:flex; gap:.6rem; margin-top:1.75rem; flex-wrap:wrap;}
+    #outname{flex:1; min-width:11rem;}
+    button#go{
+      font-family:inherit; font-weight:600; font-size:.85rem;
+      letter-spacing:.08em; text-transform:uppercase;
+      padding:.55rem 1.4rem; cursor:pointer;
+      background:var(--dark); color:#fff; border:2px solid var(--dark);
+      border-radius:3px; transition:opacity .15s;
+    }
+    button#go:disabled{background:transparent; color:var(--muted); border-color:var(--border); cursor:not-allowed;}
+
+    /* Result */
+    table{border-collapse:collapse; width:100%; font-size:.85rem; margin-top:.5rem;}
+    td, th{text-align:left; padding:.35rem .5rem; border-bottom:1px solid var(--border); vertical-align:top;}
+    th{font-weight:600; color:var(--mid); white-space:nowrap;}
+    .result-head{
+      font-weight:700; font-size:.8rem; letter-spacing:.12em;
+      text-transform:uppercase; color:var(--dark);
+    }
+    .muted{color:var(--muted); font-size:.9em;}
+    .err{color:var(--red); font-weight:600;}
+    .hide{display:none;}
+  </style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>GPX <span class="plus">+</span> GPX</h1>
+    <div class="tagline">Combine two ride files into one</div>
+  </header>
+
+  <div class="card">
+    <div id="drop" tabindex="0" role="button" aria-label="Add GPX files">
+      Drop your two <strong>.gpx</strong> files here, or click to choose them.
+      <div id="picked">No files selected</div>
+    </div>
+    <input type="file" id="file" accept=".gpx,application/gpx+xml,text/xml" multiple>
+
+    <div class="section-label">Options</div>
+    <label class="opt"><input type="checkbox" id="stripPower" checked> Remove power data</label>
+    <label class="opt"><input type="checkbox" id="mergeName" checked> Merge the two activity names</label>
+    <label class="opt"><input type="checkbox" id="onesegment"> Merge into one continuous segment (default keeps the stop as a pause)</label>
+
+    <div class="section-label">Timestamp shift</div>
+    <div class="row">
+      Shift all timestamps by
+      <input type="number" id="shiftAmt" value="0" step="1">
+      <select id="shiftUnit">
+        <option value="0">— no shift —</option>
+        <option value="60000">minutes</option>
+        <option value="3600000">hours</option>
+        <option value="86400000">days</option>
+      </select>
+    </div>
+    <div class="hint">Shifting makes Strava treat the result as a new activity instead of a duplicate of a file you already uploaded.</div>
+
+    <div class="actions">
+      <button id="go" disabled>Combine &amp; download</button>
+      <input type="text" id="outname" value="combined_activity.gpx" aria-label="Output filename">
+    </div>
+  </div>
+
+  <div id="msg" class="card hide"></div>
+</div>
+
+<script>
+"use strict";
+const GPX_NS = "http://www.topografix.com/GPX/1/1";
+const $ = id => document.getElementById(id);
+let loaded = []; // [{name, text}]
+
+// --- helpers -------------------------------------------------------------
+// Collect descendants by local name, ignoring namespace prefix quirks.
+function byLocal(root, name) {
+  const out = [];
+  const walk = node => {
+    for (const el of node.children) {
+      if (el.localName === name) out.push(el);
+      walk(el);
+    }
+  };
+  walk(root);
+  return out;
+}
+function firstTime(doc) {
+  const t = byLocal(doc.documentElement, "trkpt")
+    .map(p => byLocal(p, "time")[0]).find(Boolean);
+  return t ? Date.parse(t.textContent) : NaN;
+}
+function fmt(ms) {
+  if (!isFinite(ms)) return "?";
+  const s = Math.round(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+  return `${h}h ${String(m).padStart(2, "0")}m`;
+}
+function parseGpx(text, label) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length)
+    throw new Error(`${label} is not valid XML.`);
+  if (!byLocal(doc.documentElement, "trkpt").length)
+    throw new Error(`${label} contains no track points.`);
+  return doc;
+}
+
+// --- core: combine two parsed docs --------------------------------------
+function combine(docA, docB) {
+  // Earlier ride becomes the base; later ride's segments get appended.
+  const [base, next] = firstTime(docA) <= firstTime(docB) ? [docA, docB] : [docB, docA];
+  const trk = byLocal(base.documentElement, "trk")[0];
+  let segsB = byLocal(next.documentElement, "trkseg");
+
+  if ($("onesegment").checked) {
+    // Drop all points into the base's first segment.
+    let baseSeg = byLocal(trk, "trkseg")[0];
+    for (const seg of segsB)
+      for (const pt of byLocal(seg, "trkpt"))
+        baseSeg.appendChild(base.importNode(pt, true));
+  } else {
+    for (const seg of segsB) trk.appendChild(base.importNode(seg, true));
+  }
+
+  if ($("mergeName").checked) {
+    const nA = byLocal(base.documentElement, "trk").flatMap(t => byLocal(t, "name"))[0];
+    const nB = byLocal(next.documentElement, "trk").flatMap(t => byLocal(t, "name"))[0];
+    if (nA && nB && !nA.textContent.includes(nB.textContent))
+      nA.textContent = `${nA.textContent} + ${nB.textContent}`;
+  }
+
+  if ($("stripPower").checked)
+    for (const p of byLocal(base.documentElement, "power")) p.parentNode.removeChild(p);
+
+  const unit = Number($("shiftUnit").value);
+  const offset = unit * Number($("shiftAmt").value || 0);
+  if (offset)
+    for (const t of byLocal(base.documentElement, "time")) {
+      const d = Date.parse(t.textContent);
+      if (isFinite(d)) t.textContent = new Date(d + offset).toISOString().replace(/Z$/, "Z");
+    }
+
+  return base;
+}
+
+// --- summary + download --------------------------------------------------
+function report(doc, powerRemoved) {
+  const segs = byLocal(doc.documentElement, "trkseg");
+  const segInfo = segs.map(s => {
+    const times = byLocal(s, "trkpt").map(p => byLocal(p, "time")[0]?.textContent).filter(Boolean);
+    return { n: byLocal(s, "trkpt").length, start: times[0], end: times.at(-1) };
+  });
+  const total = segInfo.reduce((a, s) => a + s.n, 0);
+  const name = byLocal(doc.documentElement, "name")[0]?.textContent || "(none)";
+  const span = fmt(Date.parse(segInfo.at(-1).end) - Date.parse(segInfo[0].start));
+  let gap = "";
+  if (segInfo.length > 1)
+    gap = ` &nbsp; <span class="muted">(gap between segments: ${fmt(Date.parse(segInfo[1].start) - Date.parse(segInfo[0].end))})</span>`;
+
+  let rows = segInfo.map((s, i) =>
+    `<tr><td>segment ${i + 1}</td><td>${s.n} pts</td><td>${s.start} → ${s.end}</td></tr>`).join("");
+  $("msg").className = "card";
+  $("msg").innerHTML = `
+    <div class="result-head">✓ Combined</div>
+    <table>
+      <tr><th>Name</th><td colspan="2">${name}</td></tr>
+      <tr><th>Total points</th><td colspan="2">${total}</td></tr>
+      <tr><th>Total span</th><td colspan="2">${span}${gap}</td></tr>
+      <tr><th>Power removed</th><td colspan="2">${powerRemoved}</td></tr>
+      ${rows}
+    </table>`;
+}
+
+function download(doc, filename) {
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    new XMLSerializer().serializeToString(doc.documentElement);
+  const url = URL.createObjectURL(new Blob([xml], { type: "application/gpx+xml" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = filename || "combined_activity.gpx";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// --- wiring --------------------------------------------------------------
+function showError(e) {
+  $("msg").className = "card";
+  $("msg").innerHTML = `<span class="err">⚠ ${e.message || e}</span>`;
+}
+function setFiles(files) {
+  loaded = [...files].filter(f => /\.gpx$/i.test(f.name)).slice(0, 2);
+  $("picked").textContent = loaded.length
+    ? loaded.map(f => f.name).join("  +  ")
+    : "No files selected";
+  $("go").disabled = loaded.length !== 2;
+  $("msg").className = "card hide";
+}
+
+$("go").addEventListener("click", async () => {
+  try {
+    if (loaded.length !== 2) throw new Error("Please select exactly two .gpx files.");
+    const docs = [];
+    for (const f of loaded) docs.push(parseGpx(await f.text(), f.name));
+    let power = 0;
+    if ($("stripPower").checked)
+      power = docs.reduce((a, d) => a + byLocal(d.documentElement, "power").length, 0);
+    const out = combine(docs[0], docs[1]);
+    report(out, power);
+    download(out, $("outname").value.trim());
+  } catch (e) { showError(e); }
+});
+
+const drop = $("drop");
+drop.addEventListener("click", () => $("file").click());
+drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") $("file").click(); });
+$("file").addEventListener("change", e => setFiles(e.target.files));
+["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => {
+  e.preventDefault(); drop.classList.add("over");
+}));
+["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => {
+  e.preventDefault(); drop.classList.remove("over");
+}));
+drop.addEventListener("drop", e => setFiles(e.dataTransfer.files));
+</script>
+<script src="/footer.js"></script>
+</body>
+</html>
