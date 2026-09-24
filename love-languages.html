@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Love Languages Quiz — Andy's Toolbox</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f0ede8; --surface:#ffffff; --dark:#1a1a1a;
+      --mid:#666; --muted:#999; --border:#ddd; --accent:#e74c3c;
+    }
+    body{
+      font-family:system-ui,sans-serif;
+      background:var(--bg); color:var(--dark);
+      min-height:100vh; padding:2rem 1rem; line-height:1.6;
+    }
+    body::before{
+      content:''; position:fixed; inset:0; z-index:0;
+      background-image:repeating-linear-gradient(
+        45deg, transparent, transparent 20px,
+        rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 21px
+      );
+    }
+    .page{position:relative;z-index:1;width:min(680px,100%);margin:0 auto;}
+
+    header{margin-bottom:1.5rem;}
+    h1{font-size:clamp(1.6rem,5vw,2.4rem);text-transform:uppercase;font-weight:700;line-height:1.1;}
+    .sub{margin-top:.4rem;font-size:.8rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;}
+    .intro{margin-top:.75rem;font-size:.95rem;color:var(--mid);}
+
+    .card{
+      background:var(--surface); border:2px solid var(--dark);
+      border-radius:4px; padding:1.5rem;
+    }
+    .card + .card{margin-top:1.25rem;}
+
+    .label{
+      font-size:.75rem;font-weight:600;letter-spacing:.12em;
+      text-transform:uppercase;color:var(--muted);
+    }
+
+    /* Sticky score strip */
+    .scorebar{
+      position:sticky;top:0;z-index:2;
+      background:var(--surface);border:2px solid var(--dark);border-radius:4px;
+      padding:.75rem 1rem;margin-bottom:1.25rem;
+      display:flex;align-items:center;gap:1rem;flex-wrap:wrap;
+    }
+    .scorebar .counts{display:flex;gap:.5rem;flex-wrap:wrap;flex:1;}
+    .chip{
+      font-size:.85rem;font-weight:700;
+      border:2px solid var(--border);border-radius:3px;
+      padding:.15rem .55rem;color:var(--mid);
+      display:flex;align-items:center;gap:.4rem;
+    }
+    .chip.lead{border-color:var(--dark);color:var(--dark);}
+    .chip span{font-weight:400;font-size:.75rem;color:var(--muted);}
+    .progress{font-size:.8rem;color:var(--muted);white-space:nowrap;}
+
+    /* Questions */
+    ol.qs{list-style:none;}
+    .q{padding:.9rem 0;border-top:1px solid var(--border);}
+    .q:first-child{border-top:none;padding-top:0;}
+    .q .num{font-size:.75rem;font-weight:600;color:var(--muted);letter-spacing:.1em;margin-bottom:.35rem;}
+    .opt{
+      display:flex;gap:.7rem;align-items:flex-start;
+      width:100%;text-align:left;font:inherit;
+      background:transparent;color:var(--dark);
+      border:2px solid var(--border);border-radius:3px;
+      padding:.55rem .75rem;margin-top:.4rem;cursor:pointer;
+      transition:border-color .12s,background .12s;
+    }
+    .opt:hover{border-color:var(--mid);background:#fafafa;}
+    .opt:focus-visible{outline:none;border-color:var(--dark);}
+    .opt.on{background:var(--dark);color:#fff;border-color:var(--dark);}
+    .opt .ltr{
+      flex:0 0 1.6rem;height:1.6rem;border-radius:3px;
+      display:inline-flex;align-items:center;justify-content:center;
+      font-weight:700;font-size:.85rem;
+      border:1px solid var(--border);color:var(--mid);
+      margin-top:.1rem;
+    }
+    .opt.on .ltr{background:#fff;color:var(--dark);border-color:#fff;}
+
+    /* Results */
+    .row{display:grid;grid-template-columns:8.5rem 1fr 2.2rem;gap:.75rem;align-items:center;margin-top:.6rem;}
+    .row .name{font-weight:600;font-size:.9rem;}
+    .row .name small{display:block;font-weight:400;font-size:.7rem;color:var(--muted);letter-spacing:.08em;}
+    .bar{height:1.1rem;border:2px solid var(--border);border-radius:3px;overflow:hidden;background:#fafafa;}
+    .bar i{display:block;height:100%;background:var(--dark);width:0;transition:width .2s;}
+    .row.lead .bar i{background:var(--accent);}
+    .row .n{font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
+    .verdict{margin-top:1rem;font-size:.95rem;}
+    .verdict strong{color:var(--accent);}
+    .max{font-size:.75rem;color:var(--muted);margin-top:.35rem;}
+
+    .actions{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1.25rem;}
+    button.btn{
+      font:inherit;font-size:.85rem;font-weight:600;
+      padding:.5rem .9rem;border-radius:3px;cursor:pointer;
+      border:2px solid var(--dark);background:var(--dark);color:#fff;
+    }
+    button.btn.ghost{background:transparent;color:var(--mid);border-color:var(--border);}
+    button.btn.ghost:hover{border-color:var(--dark);color:var(--dark);}
+    .note{font-size:.75rem;color:var(--muted);margin-top:.6rem;}
+
+    @media (max-width:480px){
+      .row{grid-template-columns:6.5rem 1fr 2rem;}
+      .card{padding:1.1rem;}
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Love Languages Quiz</h1>
+    <div class="sub">Gary Chapman's 30-pair profile</div>
+    <p class="intro">For each pair, pick the statement that better describes you. Your totals update as you go. Nothing leaves your browser; the share link just encodes your answers in the URL.</p>
+  </header>
+
+  <div class="scorebar" id="scorebar">
+    <div class="counts" id="chips"></div>
+    <div class="progress" id="progress">0 / 30</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Questions</div>
+    <ol class="qs" id="qs"></ol>
+  </div>
+
+  <div class="card" id="results">
+    <div class="label">Results</div>
+    <div id="rows"></div>
+    <div class="verdict" id="verdict"></div>
+    <div class="max">Each language can score at most 12. Ties are common; read the top two or three as your profile.</div>
+    <div class="actions">
+      <button class="btn" id="share">Copy share link</button>
+      <button class="btn ghost" id="reset">Reset</button>
+    </div>
+    <div class="note" id="note"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const LANG = {
+    A:'Words of Affirmation',
+    B:'Quality Time',
+    C:'Receiving Gifts',
+    D:'Acts of Service',
+    E:'Physical Touch'
+  };
+  const KEYS = Object.keys(LANG);
+
+  // [ [letter, text], [letter, text] ] per question, in the order printed on the test.
+  const Q = [
+    [['A','I like to receive notes of affirmation from you.'],['E','I like it when you hug me.']],
+    [['B','I like to spend one-on-one time with you.'],['D','I feel loved when you give me practical help.']],
+    [['C','I like it when you give me gifts.'],['B','I like taking long walks with you.']],
+    [['D','I feel loved when you do things to help me.'],['E','I feel loved when you hug or touch me.']],
+    [['E','I feel loved when you hold me in your arms.'],['C','I feel loved when I receive a gift from you.']],
+    [['B','I like to go places with you.'],['E','I like to hold hands with you.']],
+    [['A','I feel loved when you acknowledge me.'],['C','Visible symbols of love (gifts) are very important to me.']],
+    [['E','I like to sit close to you.'],['A','I like it when you tell me that I am attractive.']],
+    [['B','I like to spend time with you.'],['C','I like to receive little gifts from you.']],
+    [['D','I know you love me when you help me.'],['A','Your words of acceptance are important to me.']],
+    [['B','I like to be together when we do things.'],['A','I like the kind words you say to me.']],
+    [['E','I feel whole when we hug.'],['D','What you do affects me more than what you say.']],
+    [['A','I value your praise and try to avoid your criticism.'],['C','Several inexpensive gifts mean more to me than one large expensive gift.']],
+    [['E','I feel closer to you when you touch me.'],['B','I feel close when we are talking or doing something together.']],
+    [['A','I like you to compliment my achievements.'],['D','I know you love me when you do things for me that you don’t enjoy doing.']],
+    [['E','I like for you to touch me when you walk by.'],['B','I like when you listen to me sympathetically.']],
+    [['C','I really enjoy receiving gifts from you.'],['D','I feel loved when you help me with my home projects.']],
+    [['A','I like when you compliment my appearance.'],['B','I feel loved when you take the time to understand my feelings.']],
+    [['E','I feel secure when you are touching me.'],['D','Your acts of service make me feel loved.']],
+    [['D','I appreciate the many things you do for me.'],['C','I like receiving gifts that you make.']],
+    [['B','I really enjoy the feeling I get when you give me your undivided attention.'],['D','I really enjoy the feeling I get when you do some act of service for me.']],
+    [['C','I feel loved when you celebrate my birthday with a gift.'],['A','I feel loved when you celebrate my birthday with meaningful words (written or spoken).']],
+    [['D','I feel loved when you help me out with my chores.'],['C','I know you are thinking of me when you give me a gift.']],
+    [['C','I appreciate it when you remember special days with a gift.'],['B','I appreciate it when you listen patiently and don’t interrupt me.']],
+    [['B','I enjoy extended trips with you.'],['D','I like to know that you are concerned enough to help me with my daily tasks.']],
+    [['E','Kissing me unexpectedly makes me feel loved.'],['C','Giving me a gift for no occasion makes me feel loved.']],
+    [['A','I like to be told that you appreciate me.'],['B','I like for you to look at me when we are talking.']],
+    [['C','Your gifts are always special to me.'],['E','I feel loved when you kiss me.']],
+    [['A','I feel loved when you tell me how much you appreciate me.'],['D','I feel loved when you enthusiastically do a task I have requested.']],
+    [['E','I need to be hugged by you every day.'],['A','I need your words of affirmation daily.']]
+  ];
+
+  // answers[i] = 0 (first option), 1 (second option), or null
+  let answers = new Array(Q.length).fill(null);
+
+  const $ = id => document.getElementById(id);
+  const qs = $('qs'), chips = $('chips'), rows = $('rows');
+
+  // ---- build question list ----
+  Q.forEach((pair, i) => {
+    const li = document.createElement('li');
+    li.className = 'q';
+    li.innerHTML = '<div class="num">' + (i+1) + ' / ' + Q.length + '</div>';
+    pair.forEach((opt, j) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'opt';
+      b.dataset.q = i; b.dataset.o = j;
+      b.setAttribute('aria-pressed', 'false');
+      b.innerHTML = '<span class="ltr">' + opt[0] + '</span><span>' + opt[1] + '</span>';
+      b.addEventListener('click', () => {
+        answers[i] = (answers[i] === j) ? null : j; // click again to clear
+        render();
+      });
+      li.appendChild(b);
+    });
+    qs.appendChild(li);
+  });
+
+  // ---- build result rows and chips ----
+  KEYS.forEach(k => {
+    const r = document.createElement('div');
+    r.className = 'row'; r.id = 'row-' + k;
+    r.innerHTML =
+      '<div class="name">' + LANG[k] + '<small>' + k + '</small></div>' +
+      '<div class="bar"><i></i></div>' +
+      '<div class="n">0</div>';
+    rows.appendChild(r);
+
+    const c = document.createElement('div');
+    c.className = 'chip'; c.id = 'chip-' + k;
+    c.innerHTML = k + ' <span>0</span>';
+    chips.appendChild(c);
+  });
+
+  function tally(){
+    const t = {A:0,B:0,C:0,D:0,E:0};
+    answers.forEach((a, i) => { if (a !== null) t[Q[i][a][0]]++; });
+    return t;
+  }
+
+  function render(){
+    const t = tally();
+    const done = answers.filter(a => a !== null).length;
+    const max = Math.max(...KEYS.map(k => t[k]));
+    const leaders = max > 0 ? KEYS.filter(k => t[k] === max) : [];
+
+    // options
+    document.querySelectorAll('.opt').forEach(b => {
+      const on = answers[+b.dataset.q] === +b.dataset.o;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+
+    // chips + rows
+    KEYS.forEach(k => {
+      const chip = $('chip-' + k);
+      chip.querySelector('span').textContent = t[k];
+      chip.classList.toggle('lead', leaders.includes(k));
+      const row = $('row-' + k);
+      row.querySelector('.bar i').style.width = (t[k] / 12 * 100) + '%';
+      row.querySelector('.n').textContent = t[k];
+      row.classList.toggle('lead', leaders.includes(k));
+    });
+
+    $('progress').textContent = done + ' / ' + Q.length;
+
+    // verdict
+    const v = $('verdict');
+    if (done === 0) {
+      v.innerHTML = 'Answer the questions above to see your profile.';
+    } else {
+      const names = leaders.map(k => '<strong>' + LANG[k] + '</strong>');
+      const lead = leaders.length === 1
+        ? 'Your primary love language is ' + names[0] + '.'
+        : 'You are tied between ' + names.slice(0,-1).join(', ') + ' and ' + names[names.length-1] + '.';
+      const lows = KEYS.filter(k => t[k] === Math.min(...KEYS.map(k => t[k])));
+      const low = ' Lowest: ' + lows.map(k => LANG[k]).join(', ') + '.';
+      v.innerHTML = lead + low + (done < Q.length ? ' <em>(' + (Q.length - done) + ' unanswered)</em>' : '');
+    }
+
+    // URL hash: one char per question, 1/2 for option, - for blank
+    const code = answers.map(a => a === null ? '-' : String(a + 1)).join('');
+    const h = done ? '#' + code : '';
+    if (location.hash !== h) history.replaceState(null, '', location.pathname + h);
+  }
+
+  function load(){
+    const h = location.hash.replace('#','');
+    if (h.length === Q.length && /^[12-]+$/.test(h)) {
+      answers = h.split('').map(c => c === '-' ? null : +c - 1);
+    }
+  }
+
+  $('reset').addEventListener('click', () => {
+    if (!answers.some(a => a !== null) || confirm('Clear all answers?')) {
+      answers.fill(null); render(); window.scrollTo({top:0, behavior:'smooth'});
+    }
+  });
+
+  $('share').addEventListener('click', () => {
+    const url = location.href;
+    const note = $('note');
+    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject())
+      .then(() => { note.textContent = 'Link copied. Send it to someone to show them your answers.'; })
+      .catch(() => { note.textContent = 'Copy this link: ' + url; });
+  });
+
+  window.addEventListener('hashchange', () => { load(); render(); });
+
+  load();
+  render();
+})();
+</script>
+<script src="/footer.js"></script>
+</body>
+</html>
